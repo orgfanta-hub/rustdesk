@@ -1,0 +1,44 @@
+{
+  "_comment": "럭스시스템 RustDesk 클라이언트 빌더 설정. PROFILE 별로 소비자용/사업자용을 빌드합니다.",
+  "rustdeskTag": "1.4.6",
+
+  "server": {
+    "idServer": "luxcom.kr",
+    "key": "mhWqt+lRoaPC5ooWc3JgneDj0EBGVWuOhZFi5hFrf5M=",
+    "ownedDomains": ["luxcom.kr", "405.kr"],
+    "_note": "idServer = 클라이언트에 '박히는' 주 서버. 현재 luxcom.kr 우선(이미 우리 공인IP 115.95.166.183 가리킴). 405.kr 은 예비 단축도메인(쓰려면 그 A레코드도 우리 IP로). ownedDomains = 랜딩/SSL 거는 보유 도메인(infra/landing/Caddyfile 과 맞추기). 80/443·21115~21119 포워딩 필요. key 는 NAS hbbs 의 id_ed25519.pub, 두 프로필 공통."
+  },
+
+  "contact": {
+    "businessName": "럭스시스템",
+    "phone": "031-393-0144",
+    "mobile": "010-3128-4070",
+    "address": "경기도 군포시 번영로 40, 201호"
+  },
+
+  "logo": {
+    "ico": "assets/app_icon.ico",
+    "png": "assets/logo.png",
+    "_note": "app_icon.ico 있으면 우선 사용. 없으면 logo.png 를 ImageMagick 으로 .ico 변환 시도."
+  },
+
+  "defaultProfile": "consumer",
+  "profiles": {
+    "consumer": {
+      "_desc": "소비자용 — 원격을 '받기만' 함(외부 제어 기능 제거).",
+      "productName": "럭스시스템 원격지원",
+      "companyName": "럭스시스템",
+      "copyright": "Copyright (C) 럭스시스템",
+      "receiveOnly": true,
+      "showContact": true
+    },
+    "staff": {
+      "_desc": "사업자(기사)용 — 원격을 '걸고 받는' 풀기능.",
+      "productName": "럭스시스템 원격관리",
+      "companyName": "럭스시스템",
+      "copyright": "Copyright (C) 럭스시스템",
+      "receiveOnly": false,
+      "showContact": false
+    }
+  }
+}
