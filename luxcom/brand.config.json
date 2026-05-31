@@ -28,8 +28,8 @@
   },
 
   "auth": {
-    "loginUrl": "https://auth.luxcom.kr",
-    "_note": "기사용(staff) 로그인 게이트가 호출하는 NAS 인증서버. POST {loginUrl}/api/login. NAS 컨테이너 lux-auth(:8090) ← NPM(auth.luxcom.kr) + SSL. 관리자 웹: {loginUrl}/admin. DNS A레코드 auth → 115.95.166.183 필요."
+    "loginUrl": "https://luxcom.kr/luxauth",
+    "_note": "기사용(staff) 로그인 게이트가 호출하는 NAS 인증서버. POST {loginUrl}/api/login. 별도 DNS 없이 기존 luxcom.kr 서브경로로 노출(NPM custom location /luxauth → 192.168.0.160:8090, 기존 SSL 재사용). 관리자 웹: {loginUrl}/admin. NAS 컨테이너 lux-auth BASE_PATH=/luxauth."
   },
 
   "logo": {
