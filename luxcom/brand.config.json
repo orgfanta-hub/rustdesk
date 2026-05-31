@@ -27,6 +27,11 @@
     "_note": "앱 액센트(버튼·강조) 컬러 — RustDesk 파랑(0071FF) 대체. 세련된 인디고."
   },
 
+  "auth": {
+    "loginUrl": "https://auth.luxcom.kr",
+    "_note": "기사용(staff) 로그인 게이트가 호출하는 NAS 인증서버. POST {loginUrl}/api/login. NAS 컨테이너 lux-auth(:8090) ← NPM(auth.luxcom.kr) + SSL. 관리자 웹: {loginUrl}/admin. DNS A레코드 auth → 115.95.166.183 필요."
+  },
+
   "logo": {
     "ico": "assets/app_icon.ico",
     "png": "assets/logo.png",
@@ -49,7 +54,8 @@
       "companyName": "럭스시스템",
       "copyright": "Copyright (C) 럭스시스템",
       "receiveOnly": false,
-      "showContact": false
+      "showContact": false,
+      "requireLogin": true
     }
   }
 }

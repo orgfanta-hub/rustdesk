@@ -209,6 +209,43 @@ if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   log('SKIP', '홈화면 연락처', '이 프로필은 연락처 표기 안 함');
 }
 
+// ── [기사 로그인 게이트] staff 전용: NAS 인증서버 로그인 후에만 사용 ──
+// 메인 창(DesktopTabPage)을 LuxComGate 로 감싼다. 소비자용(수신전용)은 미적용.
+if (prof.requireLogin && cfg.auth && cfg.auth.loginUrl) {
+  const MAIN = path.join('flutter', 'lib', 'main.dart');
+  const authUrl = String(cfg.auth.loginUrl).replace(/\/+$/, '');
+  // 1) 게이트 위젯 파일 복사(+ 인증 URL 치환)
+  (function copyGate() {
+    const label = '기사 로그인 게이트 위젯';
+    const src = path.join(builderRoot, 'staff', 'luxcom_gate.dart');
+    const dst = path.join(repoDir, 'flutter', 'lib', 'luxcom_gate.dart');
+    if (!fs.existsSync(src)) {
+      log('WARN', label, `원본 없음: ${path.relative(builderRoot, src)}`);
+      hardFail = true;
+      return;
+    }
+    const code = fs.readFileSync(src, 'utf8').replace(/__LUX_AUTH_URL__/g, authUrl);
+    fs.writeFileSync(dst, code);
+    log('OK', label, `flutter/lib/luxcom_gate.dart (auth=${authUrl})`);
+  })();
+  // 2) main.dart import 추가
+  patch(
+    MAIN, '로그인 게이트 import',
+    /^import 'consts\.dart';/m,
+    `import 'luxcom_gate.dart';\nimport 'consts.dart';`,
+    { required: true }
+  );
+  // 3) 메인 창 home 을 게이트로 감싸기 (데스크톱 main 창에만 적용)
+  patch(
+    MAIN, '메인 창 로그인 게이트 적용',
+    /\?\s*const DesktopTabPage\(\)/,
+    `? const LuxComGate(child: DesktopTabPage())`,
+    { required: true }
+  );
+} else {
+  log('SKIP', '기사 로그인 게이트', prof.requireLogin ? 'auth.loginUrl 미설정' : '이 프로필은 로그인 불필요');
+}
+
 // ── 리포트 ─────────────────────────────────────────────────────────
 const okCount = report.filter(r => r.status === 'OK').length;
 const reportMd = [
