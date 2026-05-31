@@ -22,6 +22,11 @@
     "_note": "앱 상단 'RustDesk 제공' 링크(common.dart loadPowered)를 이 문구·주소로 교체."
   },
 
+  "theme": {
+    "accentColor": "#4F46E5",
+    "_note": "앱 액센트(버튼·강조) 컬러 — RustDesk 파랑(0071FF) 대체. 세련된 인디고."
+  },
+
   "logo": {
     "ico": "assets/app_icon.ico",
     "png": "assets/logo.png",
@@ -40,7 +45,7 @@
     },
     "staff": {
       "_desc": "사업자(기사)용 — 원격을 '걸고 받는' 풀기능.",
-      "productName": "럭스시스템 원격관리",
+      "productName": "LuxCom 원격관리",
       "companyName": "럭스시스템",
       "copyright": "Copyright (C) 럭스시스템",
       "receiveOnly": false,

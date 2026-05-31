@@ -158,6 +158,43 @@ if (cfg.poweredBy && cfg.poweredBy.text) {
   log('OK', label, 'flutter/assets/logo.png');
 })();
 
+// ── [RustDesk 흔적 정리] 여러 파일 일괄 치환 헬퍼 ──
+function patchFiles(relFiles, label, re, replacement) {
+  let cnt = 0;
+  for (const rf of relFiles) {
+    const p = path.join(repoDir, rf);
+    if (!fs.existsSync(p)) continue;
+    const before = fs.readFileSync(p, 'utf8');
+    const after = before.replace(re, replacement);
+    if (after !== before) { fs.writeFileSync(p, after); cnt++; }
+  }
+  log(cnt > 0 ? 'OK' : 'SKIP', label, cnt > 0 ? (cnt + '개 파일') : '변경 없음');
+}
+const DESKTOP_PAGES = [
+  path.join('flutter', 'lib', 'common.dart'),
+  path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_setting_page.dart'),
+  path.join('flutter', 'lib', 'desktop', 'pages', 'install_page.dart'),
+  path.join('flutter', 'lib', 'desktop', 'pages', 'connection_page.dart'),
+  path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart'),
+];
+
+// rustdesk.com 모든 링크 → 우리 쇼핑몰 (흔적 제거)
+if (cfg.poweredBy && cfg.poweredBy.url) {
+  patchFiles(DESKTOP_PAGES, 'rustdesk.com 링크 → 쇼핑몰', /https:\/\/rustdesk\.com[^\s'")]*/g, cfg.poweredBy.url);
+}
+// About 제목 'About RustDesk' → 브랜드 정보
+patch(
+  path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_setting_page.dart'),
+  "About 제목('About RustDesk' 교체)",
+  /translate\('About RustDesk'\)/,
+  `'${((cfg.contact && cfg.contact.businessName) || 'LuxCom')} 정보'`
+);
+// 세련된 디자인: 액센트 컬러(RustDesk 파랑 0071FF) → 브랜드 컬러
+if (cfg.theme && cfg.theme.accentColor) {
+  const hex = cfg.theme.accentColor.replace('#', '').toUpperCase();
+  patchFiles([COMMON], `액센트 컬러 → #${hex}`, /0071FF/g, hex);
+}
+
 if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   const HOME = path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart');
   const c = cfg.contact;
