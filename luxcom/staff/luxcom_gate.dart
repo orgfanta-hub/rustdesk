@@ -118,11 +118,19 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
         await _luxComSetSession();
         if (mounted) widget.onSuccess();
         return;
-      } else if (r.statusCode == 401) {
-        setState(() => _err = '아이디 또는 비밀번호가 올바르지 않습니다.');
-      } else {
-        setState(() => _err = '서버 오류(${r.statusCode}). 잠시 후 다시 시도하세요.');
       }
+      // 서버가 내려준 안내문구(만료/정지/자격오류)를 그대로 표시
+      String msg = '';
+      try {
+        final m = jsonDecode(r.body);
+        if (m is Map && m['message'] is String) msg = m['message'] as String;
+      } catch (_) {}
+      if (msg.isEmpty) {
+        msg = r.statusCode == 401
+            ? '아이디 또는 비밀번호가 올바르지 않습니다.'
+            : '로그인할 수 없습니다 (${r.statusCode}).';
+      }
+      setState(() => _err = msg);
     } catch (_) {
       setState(() =>
           _err = '인증 서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.');
