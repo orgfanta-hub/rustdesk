@@ -106,6 +106,10 @@ jobs:
             exit 1
           fi
 
+      - name: Install ImageMagick (PNG→ICO 변환용)
+        run: choco install imagemagick -y --no-progress
+        shell: pwsh
+
       # ───── 럭스시스템 브랜딩/모드 패치 (핵심) ─────
       - name: LuxCom branding (server + mode + brand)
         shell: bash

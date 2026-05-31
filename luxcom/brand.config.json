@@ -16,6 +16,12 @@
     "address": "경기도 군포시 번영로 40, 201호"
   },
 
+  "poweredBy": {
+    "text": "럭스시스템 쇼핑몰 luxcom.co.kr",
+    "url": "https://luxcom.co.kr",
+    "_note": "앱 상단 'RustDesk 제공' 링크(common.dart loadPowered)를 이 문구·주소로 교체."
+  },
+
   "logo": {
     "ico": "assets/app_icon.ico",
     "png": "assets/logo.png",

@@ -138,6 +138,26 @@ patch(RC, 'EXE 속성 LegalCopyright',  /(VALUE "LegalCopyright",\s*")[^"]*(")/,
 })();
 
 // ── [브랜딩, 소비자용] 홈 화면 상호·연락처 ────────────────────────
+// ── [브랜딩] 상단 'RustDesk 제공' 링크 → 우리 쇼핑몰 (common.dart loadPowered) ──
+const COMMON = path.join('flutter', 'lib', 'common.dart');
+if (cfg.poweredBy && cfg.poweredBy.url) {
+  patch(COMMON, 'Powered-by 링크 URL', /launchUrl\(Uri\.parse\('https:\/\/rustdesk\.com'\)\);/, `launchUrl(Uri.parse('${cfg.poweredBy.url}'));`);
+}
+if (cfg.poweredBy && cfg.poweredBy.text) {
+  patch(COMMON, "Powered-by 문구('RustDesk 제공' 교체)", /translate\("powered_by_me"\)/, `'${cfg.poweredBy.text.replace(/'/g, "\\'")}'`);
+}
+
+// ── [브랜딩] 앱 내부 로고 (flutter/assets/logo.png, loadLogo) ──
+(function applyInAppLogo() {
+  const label = '앱 내부 로고 교체(flutter/assets/logo.png)';
+  const pngSrc = path.join(builderRoot, cfg.logo.png || 'assets/logo.png');
+  const target = path.join(repoDir, 'flutter', 'assets', 'logo.png');
+  if (!fs.existsSync(pngSrc)) { log('SKIP', label, 'assets/logo.png 없음(로고 미제공)'); return; }
+  if (!fs.existsSync(path.dirname(target))) { log('SKIP', label, 'flutter/assets 경로 없음'); return; }
+  fs.copyFileSync(pngSrc, target);
+  log('OK', label, 'flutter/assets/logo.png');
+})();
+
 if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   const HOME = path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart');
   const c = cfg.contact;
