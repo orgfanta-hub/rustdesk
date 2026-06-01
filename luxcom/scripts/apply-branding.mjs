@@ -216,6 +216,22 @@ patch(
   'if (isWindows && !bind.isDisableInstallation() && !bind.isIncomingOnly()) {'
 );
 
+// ── [소비자 편의] 수신전용: 비번 없이 '접속 시 수락' + 끄면 완전종료(접속 불가) ──
+// (A) approve-mode=click 고정: 비밀번호 칸 사라지고, 접속 시 소비자에게 수락/거부 팝업.
+patch(
+  path.join('flutter', 'lib', 'main.dart'),
+  '수신전용 승인모드(click·무비번) 고정',
+  /await bind\.mainCheckConnectStatus\(\);/,
+  `await bind.mainCheckConnectStatus();\n  if (bind.isIncomingOnly()) {\n    await bind.mainSetOption(key: kOptionApproveMode, value: 'click');\n  }`
+);
+// (B) 메인창 닫기 → 수신전용이면 트레이 숨김 대신 완전 종료(프로세스 종료=서버 중단=기사 접속 불가).
+patch(
+  path.join('flutter', 'lib', 'desktop', 'widgets', 'tabbar_widget.dart'),
+  '수신전용 닫기=완전종료(끄면 접속 불가)',
+  /mainWindowClose\(\) async => await windowManager\.hide\(\);/,
+  `mainWindowClose() async {\n      if (bind.isIncomingOnly()) {\n        await windowManager.setPreventClose(false);\n        await windowManager.close();\n        return;\n      }\n      await windowManager.hide();\n    }`
+);
+
 if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   const HOME = path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart');
   const c = cfg.contact;
