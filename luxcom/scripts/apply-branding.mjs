@@ -158,6 +158,18 @@ if (cfg.poweredBy && cfg.poweredBy.text) {
   log('OK', label, 'flutter/assets/logo.png');
 })();
 
+// ── [브랜딩] 탭바/타이틀바 아이콘 (flutter/assets/icon.png, loadIcon) ──
+// loadLogo 와 별개로 loadIcon 은 assets/icon.png 를 씀(탭바 좌상단 아이콘 등). 이것도 교체.
+(function applyAppIconAsset() {
+  const label = '앱 아이콘 에셋 교체(flutter/assets/icon.png)';
+  const pngSrc = path.join(builderRoot, cfg.logo.png || 'assets/logo.png');
+  const target = path.join(repoDir, 'flutter', 'assets', 'icon.png');
+  if (!fs.existsSync(pngSrc)) { log('SKIP', label, 'assets/logo.png 없음'); return; }
+  if (!fs.existsSync(path.dirname(target))) { log('SKIP', label, 'flutter/assets 경로 없음'); return; }
+  fs.copyFileSync(pngSrc, target);
+  log('OK', label, 'flutter/assets/icon.png');
+})();
+
 // ── [RustDesk 흔적 정리] 여러 파일 일괄 치환 헬퍼 ──
 function patchFiles(relFiles, label, re, replacement) {
   let cnt = 0;
@@ -194,6 +206,15 @@ if (cfg.theme && cfg.theme.accentColor) {
   const hex = cfg.theme.accentColor.replace('#', '').toUpperCase();
   patchFiles([COMMON], `액센트 컬러 → #${hex}`, /0071FF/g, hex);
 }
+
+// ── [소비자용 정리] 수신전용(incoming-only)에서 'Install(시스템 설치/UAC)' 카드 숨김 ──
+// RustDesk식 UAC/설치 안내가 뜨지 않게 — 수신전용 클라엔 불필요. 사업자(staff)는 유지.
+patch(
+  path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart'),
+  '설치/UAC 카드 숨김(수신전용)',
+  /if \(isWindows && !bind\.isDisableInstallation\(\)\) \{/,
+  'if (isWindows && !bind.isDisableInstallation() && !bind.isIncomingOnly()) {'
+);
 
 if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   const HOME = path.join('flutter', 'lib', 'desktop', 'pages', 'desktop_home_page.dart');
