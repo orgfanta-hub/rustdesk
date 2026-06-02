@@ -2302,6 +2302,35 @@ impl Connection {
                     && is_logon()))
                 || password::approve_mode() == ApproveMode::Both && !password::has_valid_password()
             {
+                // [LUXCOM] 재부팅 재접속 토큰 유효 시 프롬프트 없이 자동 수락(소비자 수신전용)
+                #[cfg(windows)]
+                {
+                    if hbb_common::config::is_incoming_only() {
+                        let _now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        let _peer = hbb_common::config::Config::get_option("luxcom-resume-peer");
+                        let _until: i64 = hbb_common::config::Config::get_option("luxcom-resume-until")
+                            .parse()
+                            .unwrap_or(0);
+                        if !_peer.is_empty() && _peer == lr.my_id && _now < _until {
+                            hbb_common::config::Config::set_option(
+                                "luxcom-resume-peer".to_owned(),
+                                "".to_owned(),
+                            );
+                            hbb_common::config::Config::set_option(
+                                "luxcom-resume-until".to_owned(),
+                                "".to_owned(),
+                            );
+                            if !self.send_logon_response_and_keep_alive().await {
+                                return false;
+                            }
+                            self.try_start_cm(lr.my_id.clone(), lr.my_name.clone(), true);
+                            return true;
+                        }
+                    }
+                }
                 self.try_start_cm(lr.my_id, lr.my_name, false);
                 if hbb_common::get_version_number(&lr.version)
                     >= hbb_common::get_version_number("1.2.0")
@@ -3091,6 +3120,39 @@ impl Connection {
                     Some(misc::Union::RestartRemoteDevice(_)) => {
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         if self.restart {
+                            // [LUXCOM] 소비자(수신전용) A/S: 재부팅 후 1회 자동시작(RunOnce) + 재접속 토큰
+                            #[cfg(windows)]
+                            {
+                                if hbb_common::config::is_incoming_only() {
+                                    let _until = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| d.as_secs() as i64)
+                                        .unwrap_or(0)
+                                        + 900;
+                                    hbb_common::config::Config::set_option(
+                                        "luxcom-resume-peer".to_owned(),
+                                        self.lr.my_id.clone(),
+                                    );
+                                    hbb_common::config::Config::set_option(
+                                        "luxcom-resume-until".to_owned(),
+                                        _until.to_string(),
+                                    );
+                                    if let Ok(_exe) = std::env::current_exe() {
+                                        if let Ok(_k) = winreg::RegKey::predef(
+                                            winreg::enums::HKEY_CURRENT_USER,
+                                        )
+                                        .open_subkey_with_flags(
+                                            "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
+                                            winreg::enums::KEY_WRITE,
+                                        ) {
+                                            let _ = _k.set_value(
+                                                "LuxComResume",
+                                                &format!("\"{}\"", _exe.to_string_lossy()),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                             // force_reboot, not work on linux vm and macos 14
                             #[cfg(any(target_os = "linux", target_os = "windows"))]
                             match system_shutdown::force_reboot() {
