@@ -17,6 +17,7 @@ import 'package:flutter_hbb/models/peer_model.dart';
 import '../../common.dart';
 import '../../common/formatter/id_formatter.dart';
 import '../../common/widgets/peer_tab_page.dart';
+import '../../common/widgets/peers_view.dart';
 import '../../common/widgets/autocomplete.dart';
 import '../../models/platform_model.dart';
 import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
@@ -314,8 +315,19 @@ class _ConnectionPageState extends State<ConnectionPage>
                 Flexible(child: _buildRemoteIDTextField(context)),
               ],
             ).marginOnly(top: 22),
-            // [LUXCOM] 컴팩트: 계정 로그인/주소록/최근목록 탭(PeerTabPage) 제거 — 번호 입력 연결만
-            Expanded(child: Container()),
+            // [LUXCOM] 컴팩트: 계정 로그인/주소록/검색 탭(PeerTabPage) 제거 →
+            // 번호 입력 연결 + "최근 접속한 PC" 목록만 (ScreenConnect식 세션 목록).
+            const SizedBox(height: 18),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(right: 12, bottom: 2),
+                child: Text("최근 접속한 PC",
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Expanded(child: RecentPeersView()),
           ],
         ).paddingOnly(left: 12.0)),
         if (!isOutgoingOnly) const Divider(height: 1),
