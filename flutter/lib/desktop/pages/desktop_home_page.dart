@@ -92,7 +92,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ),
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
-      if (!isOutgoingOnly) buildPasswordBoard(context),
+      // [LUXCOM] 소비자(수신전용)는 비밀번호 미사용(수락 방식) → 비번 칸 숨김
+      if (!isOutgoingOnly && !isIncomingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -414,7 +415,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           ),
           if (!isOutgoingOnly)
             Text(
-              translate("desk_tip"),
+              bind.isIncomingOnly()
+                  ? "아래 번호를 기사님께 알려주세요. 기사가 접속하면 \"수락\"을 누르시면 됩니다. (비밀번호 필요 없음)"
+                  : translate("desk_tip"),
               overflow: TextOverflow.clip,
               style: Theme.of(context).textTheme.bodySmall,
             ),

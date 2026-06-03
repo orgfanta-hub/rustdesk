@@ -314,9 +314,8 @@ class _ConnectionPageState extends State<ConnectionPage>
                 Flexible(child: _buildRemoteIDTextField(context)),
               ],
             ).marginOnly(top: 22),
-            SizedBox(height: 12),
-            Divider().paddingOnly(right: 12),
-            Expanded(child: PeerTabPage()),
+            // [LUXCOM] 컴팩트: 계정 로그인/주소록/최근목록 탭(PeerTabPage) 제거 — 번호 입력 연결만
+            Expanded(child: Container()),
           ],
         ).paddingOnly(left: 12.0)),
         if (!isOutgoingOnly) const Divider(height: 1),
