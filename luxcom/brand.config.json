@@ -3,10 +3,10 @@
   "rustdeskTag": "1.4.6",
 
   "server": {
-    "idServer": "luxcom.kr",
-    "key": "mhWqt+lRoaPC5ooWc3JgneDj0EBGVWuOhZFi5hFrf5M=",
+    "idServer": "405.kr",
+    "key": "NZ88DqGh4p9TlkfKfTRxtP70rEI3vZsVZGxQ7TFzqPU=",
     "ownedDomains": ["luxcom.kr", "405.kr"],
-    "_note": "idServer = 클라이언트에 '박히는' 주 서버. 현재 luxcom.kr 우선(이미 우리 공인IP 115.95.166.183 가리킴). 405.kr 은 예비 단축도메인(쓰려면 그 A레코드도 우리 IP로). ownedDomains = 랜딩/SSL 거는 보유 도메인(infra/landing/Caddyfile 과 맞추기). 80/443·21115~21119 포워딩 필요. key 는 NAS hbbs 의 id_ed25519.pub, 두 프로필 공통."
+    "_note": "idServer = 클라에 박히는 주 중계서버 = 405.kr → 오라클 클라우드 무료(춘천) VM 134.185.120.95 (hbbs/hbbr, systemd). 405.kr A레코드 → 134.185.120.95 (hosting.kr 에서 사장님 설정). key = 오라클 hbbs id_ed25519.pub (NZ88...). 두 프로필 공통. 구: luxcom.kr/NAS(mhWqt...) — 기존 깔린 클라용으로 NAS 중계 당분간 병행, 추후 폐기. auth.loginUrl(기사 로그인)은 NAS luxcom.kr 그대로."
   },
 
   "contact": {
