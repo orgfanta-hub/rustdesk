@@ -79,6 +79,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Widget buildLeftPane(BuildContext context) {
     final isIncomingOnly = bind.isIncomingOnly();
     final isOutgoingOnly = bind.isOutgoingOnly();
+    // [LUXCOM] 기사(풀기능) 전용 깔끔 좌패널 — 시안(밝은 톤): 로고+설정 / 내 원격 번호+복사 / 안내
+    if (!isIncomingOnly && !isOutgoingOnly) {
+      return _buildLuxStaffLeftPane(context);
+    }
     final children = <Widget>[
       if (!isOutgoingOnly) buildPresetPasswordWarning(),
       if (bind.isCustomClient())
@@ -177,6 +181,54 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                   ),
                 ),
               )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // [LUXCOM] 기사용 깔끔 좌패널 (시안): 로고 / 내 원격 번호(+설정) / 번호 복사 / 안내.
+  // 비번보드·도움카드·프리셋경고 제거 → 번호 중심 단순화.
+  Widget _buildLuxStaffLeftPane(BuildContext context) {
+    final muted =
+        Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.5);
+    return ChangeNotifierProvider.value(
+      value: gFFI.serverModel,
+      child: Container(
+        width: 280,
+        color: Theme.of(context).colorScheme.background,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 20),
+            Align(alignment: Alignment.center, child: loadLogo()),
+            const SizedBox(height: 10),
+            buildIDBoard(context),
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 2),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('번호 복사', style: TextStyle(fontSize: 12)),
+                onPressed: () {
+                  Clipboard.setData(
+                      ClipboardData(text: gFFI.serverModel.serverId.text));
+                  showToast(translate("Copied"));
+                },
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 4)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.only(left: 22, right: 16),
+              child: Text(
+                '고객이 이 번호로 접속을 요청하면\n알림이 뜹니다.',
+                style: TextStyle(fontSize: 12.5, color: muted, height: 1.5),
+              ),
+            ),
+            const Spacer(),
           ],
         ),
       ),
