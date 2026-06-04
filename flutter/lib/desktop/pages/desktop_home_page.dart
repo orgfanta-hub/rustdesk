@@ -125,7 +125,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               });
             }
           },
-        ).marginOnly(bottom: 6, right: 6)
+        ).marginOnly(bottom: 6, right: 6),
+        // [LUXCOM] 스탠바이(상주) 모드 — 켜면 무인 접속 에이전트로 상주, 끄면 제거
+        const _LuxComStandbyCard().marginOnly(left: 6, right: 6, bottom: 6),
       ]);
     }
     final textColor = Theme.of(context).textTheme.titleLarge?.color;
@@ -1047,4 +1049,240 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
       onCancel: close,
     );
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// [LUXCOM] 스탠바이(상주) 모드 카드 — 소비자(수신전용) 클라 전용.
+//  ON  : 고정 비밀번호 + 자동수락(무비번 승인창 없음) + 서비스 설치(재부팅에도 자동 시작)
+//        → 기사가 PC 이름·비밀번호로 "언제든" 무인 접속.
+//  OFF : 상주 해제 + 비밀번호 삭제 + 설치 제거 → 다시 "번호 + 수락" 일회성 방식.
+//  플래그 'luxcom-standby'='Y' 는 main.dart 시작 시 승인모드 강제(click) 를 건너뛰는 가드로도 쓰임.
+// ─────────────────────────────────────────────────────────────────────
+class _LuxComStandbyCard extends StatefulWidget {
+  const _LuxComStandbyCard();
+  @override
+  State<_LuxComStandbyCard> createState() => _LuxComStandbyCardState();
+}
+
+class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
+  static const _accent = Color(0xFF4F46E5);
+
+  bool get _on => bind.mainGetOptionSync(key: 'luxcom-standby') == 'Y';
+  String get _pcName => bind.mainGetOptionSync(key: 'luxcom-standby-name');
+
+  void _enable() {
+    final nameCtrl = TextEditingController(text: _pcName);
+    final pwCtrl = TextEditingController();
+    String err = '';
+    bool obscure = true;
+    gFFI.dialogManager.show((setDlg, close, context) {
+      submit() async {
+        final name = nameCtrl.text.trim();
+        final pw = pwCtrl.text;
+        if (name.isEmpty) {
+          setDlg(() => err = 'PC 이름을 입력하세요.');
+          return;
+        }
+        if (pw.length < 6) {
+          setDlg(() => err = '비밀번호는 6자 이상이어야 합니다.');
+          return;
+        }
+        close();
+        // 무인 접속 설정: 고정 비밀번호 + 자동 수락(승인창 없음)
+        await bind.mainSetPermanentPassword(password: pw);
+        await bind.mainSetOption(
+            key: 'verification-method', value: 'use-permanent-password');
+        await bind.mainSetOption(key: 'approve-mode', value: 'password');
+        await bind.mainSetOption(key: 'luxcom-standby-name', value: name);
+        await bind.mainSetOption(key: 'luxcom-standby', value: 'Y');
+        if (mounted) setState(() {});
+        // 서비스로 설치 → 재부팅에도 항상 자동 시작. (Windows 권한창 1회)
+        await bind.installInstallMe(
+            options: 'desktopicon startmenu', path: bind.installInstallPath());
+      }
+
+      return CustomAlertDialog(
+        title: const Text('스탠바이 모드 켜기'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              const Text(
+                '이 PC를 상주 등록하면 기사가 번호 없이 언제든 접속할 수 있습니다.\n재부팅해도 자동으로 다시 대기합니다.',
+                style: TextStyle(fontSize: 12.5, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '이 PC 이름',
+                  hintText: '예: 안방 컴퓨터, 카운터 PC',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pwCtrl,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  labelText: '접속 비밀번호 (6자 이상)',
+                  hintText: '기사에게 알려줄 비밀번호',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                        obscure ? Icons.visibility_off : Icons.visibility,
+                        size: 18),
+                    onPressed: () => setDlg(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+              if (err.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(err,
+                      style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ),
+              const SizedBox(height: 10),
+              const Text(
+                '※ 켜는 중에 Windows 권한 창이 한 번 뜨면 "예"를 눌러주세요.',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          dialogButton('취소', onPressed: close, isOutline: true),
+          dialogButton('켜기', onPressed: submit),
+        ],
+        onSubmit: submit,
+        onCancel: close,
+      );
+    });
+  }
+
+  void _disable() {
+    gFFI.dialogManager.show((setDlg, close, context) {
+      doDisable() async {
+        close();
+        // 무인 접속 해제 → 일회성(수락) 방식으로 복귀
+        await bind.mainSetOption(key: 'luxcom-standby', value: '');
+        await bind.mainSetPermanentPassword(password: '');
+        await bind.mainSetOption(key: 'approve-mode', value: 'click');
+        await bind.mainSetOption(key: 'verification-method', value: '');
+        if (mounted) setState(() {});
+        // 설치 제거(서비스/파일) — 권한 상승 후 앱 종료
+        await bind.mainUninstallMe();
+      }
+
+      return CustomAlertDialog(
+        title: const Text('스탠바이 모드 끄기'),
+        content: const ConstrainedBox(
+          constraints: BoxConstraints(minWidth: 420),
+          child: Text(
+            '상주 등록을 해제합니다.\n이후 기사는 자동으로 접속할 수 없으며, 다시 "번호 + 수락" 방식으로 돌아갑니다.\n\n끄는 중에 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
+            style: TextStyle(fontSize: 13, height: 1.5),
+          ),
+        ),
+        actions: [
+          dialogButton('취소', onPressed: close, isOutline: true),
+          dialogButton('끄기 (제거)', onPressed: doDisable),
+        ],
+        onCancel: close,
+      );
+    });
+  }
+
+  void _viewPassword() async {
+    final pw = await bind.mainGetPermanentPassword();
+    gFFI.dialogManager.show((setDlg, close, context) => CustomAlertDialog(
+          title: const Text('접속 비밀번호'),
+          content: SelectableText(
+            pw.isEmpty ? '(미설정)' : pw,
+            style: const TextStyle(
+                fontSize: 22, letterSpacing: 2, fontWeight: FontWeight.bold),
+          ),
+          actions: [dialogButton('닫기', onPressed: close)],
+          onSubmit: close,
+          onCancel: close,
+        ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = _on;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: on
+            ? _accent.withOpacity(0.06)
+            : Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color:
+                on ? _accent.withOpacity(0.4) : Colors.grey.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(on ? Icons.shield : Icons.shield_outlined,
+                  size: 18, color: on ? _accent : Colors.grey),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text('스탠바이 모드',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+              SizedBox(
+                height: 26,
+                child: Switch(
+                  value: on,
+                  activeColor: _accent,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (v) {
+                    if (v) {
+                      _enable();
+                    } else {
+                      _disable();
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (on) ...[
+            Text('상주 중 · 기사가 언제든 접속',
+                style: TextStyle(
+                    fontSize: 12, color: _accent, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Text('이 PC 이름: ${_pcName.isEmpty ? "(미설정)" : _pcName}',
+                style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.key, size: 14),
+              label: const Text('비밀번호 보기', style: TextStyle(fontSize: 12)),
+              onPressed: _viewPassword,
+              style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  minimumSize: const Size(0, 30)),
+            ),
+          ] else
+            const Text(
+              '켜두면 기사가 번호 없이 언제든 접속할 수 있어요.\n재부팅해도 자동으로 다시 대기합니다.',
+              style:
+                  TextStyle(fontSize: 11.5, color: Colors.grey, height: 1.4),
+            ),
+        ],
+      ),
+    );
+  }
 }

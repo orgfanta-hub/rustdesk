@@ -2316,6 +2316,18 @@ pub fn install_install_options() -> SyncReturn<String> {
     SyncReturn(install_options())
 }
 
+// [LUXCOM] 스탠바이(상주) 모드 해제용 — 설치된 서비스/파일 제거(권한 상승). 소비자 클라 전용.
+// install_me 래퍼(ui_interface)와 동일 패턴: 스레드에서 권한상승 언인스톨 실행 후 프로세스 종료.
+pub fn main_uninstall_me() {
+    #[cfg(windows)]
+    std::thread::spawn(move || {
+        if let Err(e) = crate::platform::windows::uninstall_me(true) {
+            log::error!("[luxcom] standby uninstall failed: {}", e);
+        }
+        std::process::exit(0);
+    });
+}
+
 pub fn main_account_auth(op: String, remember_me: bool) {
     let id = get_id();
     let uuid = get_uuid();

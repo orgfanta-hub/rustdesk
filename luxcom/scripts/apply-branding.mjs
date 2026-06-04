@@ -222,7 +222,7 @@ patch(
   path.join('flutter', 'lib', 'main.dart'),
   '수신전용 승인모드(click·무비번) 고정',
   /await bind\.mainCheckConnectStatus\(\);/,
-  `await bind.mainCheckConnectStatus();\n  if (bind.isIncomingOnly()) {\n    await bind.mainSetOption(key: kOptionApproveMode, value: 'click');\n  }`
+  `await bind.mainCheckConnectStatus();\n  if (bind.isIncomingOnly() && bind.mainGetOptionSync(key: 'luxcom-standby') != 'Y') {\n    await bind.mainSetOption(key: kOptionApproveMode, value: 'click');\n  }`
 );
 // (B) 메인창 닫기 → 수신전용이면 트레이 숨김 대신 완전 종료(프로세스 종료=서버 중단=기사 접속 불가).
 patch(
