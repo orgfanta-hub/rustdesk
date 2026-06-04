@@ -1234,11 +1234,11 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
 
       return CustomAlertDialog(
         title: const Text('스탠바이 모드 끄기'),
-        content: const ConstrainedBox(
-          constraints: BoxConstraints(minWidth: 420),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 420),
           child: Text(
             '상주 등록을 해제합니다.\n이후 기사는 자동으로 접속할 수 없으며, 다시 "번호 + 수락" 방식으로 돌아갑니다.\n\n끄는 중에 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
-            style: TextStyle(fontSize: 13, height: 1.5),
+            style: const TextStyle(fontSize: 13, height: 1.5),
           ),
         ),
         actions: [
