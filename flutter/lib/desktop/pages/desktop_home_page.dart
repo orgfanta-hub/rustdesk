@@ -22,6 +22,7 @@ import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_windows/webview_windows.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 import '../widgets/button.dart';
@@ -61,12 +62,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.build(context);
     final isIncomingOnly = bind.isIncomingOnly();
     return _buildBlock(
-        child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
       children: [
-        buildLeftPane(context),
-        if (!isIncomingOnly) const VerticalDivider(width: 1),
-        if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildLeftPane(context),
+            if (!isIncomingOnly) const VerticalDivider(width: 1),
+            if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
+          ],
+        ),
+        // [LUXCOM] 실행 시 우측하단 광고(애드센스) 팝업 — 소비자·기사 둘 다, 1회
+        const _LuxComAdOverlay(),
       ],
     ));
   }
@@ -1345,6 +1352,115 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
                   TextStyle(fontSize: 11.5, color: Colors.grey, height: 1.4),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// [LUXCOM] 실행 시 우측하단 광고(애드센스) 팝업 — 소비자·기사 둘 다, 프로세스당 1회.
+//  RustDesk Flutter엔 웹뷰가 없어 webview_windows(WebView2)로 광고 페이지 로드.
+//  광고 페이지(기본 luxcom.kr/ad/)에 애드센스 코드를 넣음(계정/정책 책임=사장님).
+//  옵션 'luxcom-ad-url'='off' 면 끔, 그 외 값이면 그 URL 사용. WebView2 없거나 실패 시 조용히 생략.
+// ─────────────────────────────────────────────────────────────────────
+class _LuxComAdOverlay extends StatefulWidget {
+  const _LuxComAdOverlay();
+  @override
+  State<_LuxComAdOverlay> createState() => _LuxComAdOverlayState();
+}
+
+class _LuxComAdOverlayState extends State<_LuxComAdOverlay> {
+  static bool _shownThisLaunch = false;
+  WebviewController? _controller;
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_shownThisLaunch) {
+      _shownThisLaunch = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+    }
+  }
+
+  Future<void> _init() async {
+    final opt = bind.mainGetOptionSync(key: 'luxcom-ad-url');
+    if (opt == 'off') return; // 킬 스위치
+    final url = opt.isEmpty ? 'https://luxcom.kr/ad/' : opt;
+    try {
+      final c = WebviewController();
+      await c.initialize();
+      await c.loadUrl(url);
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() {
+        _controller = c;
+        _show = true;
+      });
+    } catch (_) {
+      // WebView2 미설치/로드 실패 → 광고 생략 (앱 동작엔 영향 없음)
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _close() {
+    final c = _controller;
+    setState(() {
+      _show = false;
+      _controller = null;
+    });
+    c?.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    if (!_show || c == null) return const SizedBox.shrink();
+    return Positioned(
+      right: 14,
+      bottom: 14,
+      child: Material(
+        elevation: 10,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 336,
+          height: 280,
+          child: Column(
+            children: [
+              Container(
+                height: 26,
+                color: const Color(0xFFEFEFF4),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    const Text('광고',
+                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    const Spacer(),
+                    InkWell(
+                      onTap: _close,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: const Icon(Icons.close,
+                            size: 15, color: Colors.grey),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: Webview(c)),
+            ],
+          ),
+        ),
       ),
     );
   }

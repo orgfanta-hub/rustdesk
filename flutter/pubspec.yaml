@@ -37,6 +37,8 @@ dependencies:
   package_info_plus: ^4.2.0
   url_launcher: ^6.3.1
   url_launcher_ios: ^6.3.2
+  # [LUXCOM] 실행 시 우측하단 광고(애드센스) 팝업용 인앱 웹뷰 (Windows WebView2)
+  webview_windows: ^0.4.0
   toggle_switch: ^2.1.0
   dash_chat_2:
     git:
