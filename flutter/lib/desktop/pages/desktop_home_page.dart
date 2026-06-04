@@ -1154,35 +1154,41 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       }
 
       return CustomAlertDialog(
-        title: const Text('스탠바이 모드 켜기'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 460),
+        title: const Text('스탠바이 모드 켜기',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: SizedBox(
+          width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 4),
               const Text(
-                '이 PC를 상주 등록하면 기사가 번호 없이 언제든 접속할 수 있습니다.\n재부팅해도 자동으로 다시 대기합니다.',
-                style: TextStyle(fontSize: 12.5, height: 1.5),
+                '이 PC를 상주 등록하면 기사가 번호 없이\n언제든 접속할 수 있어요.\n재부팅해도 자동으로 다시 대기합니다.',
+                style: TextStyle(fontSize: 12, height: 1.45),
               ),
               const SizedBox(height: 16),
+              const Text('이 PC 이름',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 5),
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
+                style: const TextStyle(fontSize: 14),
                 decoration: const InputDecoration(
-                  labelText: '이 PC 이름',
-                  hintText: '예: 안방 컴퓨터, 카운터 PC',
+                  hintText: '예: 안방 컴퓨터',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
               const SizedBox(height: 12),
+              const Text('접속 비밀번호 (6자 이상)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 5),
               TextField(
                 controller: pwCtrl,
                 obscureText: obscure,
+                style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: '접속 비밀번호 (6자 이상)',
                   hintText: '기사에게 알려줄 비밀번호',
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -1200,10 +1206,10 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
                   child: Text(err,
                       style: const TextStyle(color: Colors.red, fontSize: 12)),
                 ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               const Text(
-                '※ 켜는 중에 Windows 권한 창이 한 번 뜨면 "예"를 눌러주세요.',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
+                '※ 켜는 중 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
+                style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4),
               ),
             ],
           ),
@@ -1233,12 +1239,13 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       }
 
       return CustomAlertDialog(
-        title: const Text('스탠바이 모드 끄기'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 420),
+        title: const Text('스탠바이 모드 끄기',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: SizedBox(
+          width: double.maxFinite,
           child: Text(
-            '상주 등록을 해제합니다.\n이후 기사는 자동으로 접속할 수 없으며, 다시 "번호 + 수락" 방식으로 돌아갑니다.\n\n끄는 중에 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
-            style: const TextStyle(fontSize: 13, height: 1.5),
+            '상주 등록을 해제합니다.\n이후 기사는 자동으로 접속할 수 없으며,\n다시 "번호 + 수락" 방식으로 돌아갑니다.\n\n끄는 중 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
+            style: const TextStyle(fontSize: 12.5, height: 1.5),
           ),
         ),
         actions: [
@@ -1253,11 +1260,15 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   void _viewPassword() async {
     final pw = await bind.mainGetPermanentPassword();
     gFFI.dialogManager.show((setDlg, close, context) => CustomAlertDialog(
-          title: const Text('접속 비밀번호'),
-          content: SelectableText(
-            pw.isEmpty ? '(미설정)' : pw,
-            style: const TextStyle(
-                fontSize: 22, letterSpacing: 2, fontWeight: FontWeight.bold),
+          title: const Text('접속 비밀번호',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SelectableText(
+              pw.isEmpty ? '(미설정)' : pw,
+              style: const TextStyle(
+                  fontSize: 22, letterSpacing: 2, fontWeight: FontWeight.bold),
+            ),
           ),
           actions: [dialogButton('닫기', onPressed: close)],
           onSubmit: close,
