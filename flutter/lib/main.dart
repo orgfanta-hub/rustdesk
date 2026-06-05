@@ -6,6 +6,7 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:webview_windows/webview_windows.dart';
 import 'package:flutter_hbb/common/widgets/overlay.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/pages/install_page.dart';
@@ -58,6 +59,12 @@ Future<void> main(List<String> args) async {
     final argument = args[2].isEmpty
         ? <String, dynamic>{}
         : jsonDecode(args[2]) as Map<String, dynamic>;
+    // [LUXCOM] 광고 창: 별도 데스크탑 창(화면 우측하단). 위 showTitleBar(false)로 테두리 없음.
+    if (argument['luxcom_ad'] == true) {
+      runApp(_LuxComAdWindow(
+          url: (argument['url'] as String?) ?? 'https://luxcom.kr/ad/'));
+      return;
+    }
     int type = argument['type'] ?? -1;
     // to-do: No need to parse window id ?
     // Because stateGlobal.windowId is a global value.
@@ -591,4 +598,138 @@ Widget keyListenerBuilder(BuildContext context, Widget? child) {
       }
     },
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// [LUXCOM] 광고 창 — 데스크탑 화면 우측하단에 뜨는 별도 창(RaiDrive식).
+//  desktop_multi_window 의 sub-window 로 생성되며(테두리 없음), webview_windows(WebView2)
+//  로 광고 페이지(기본 luxcom.kr/ad/)를 로드한다. 창은 스스로 화면 우측하단으로
+//  이동(setFrame)한 뒤 표시(show)한다. WebView2 미설치/로드 실패 시 창을 조용히 닫는다.
+//  애드센스 코드/계정/정책 책임 = 사장님(데스크탑 앱 게재는 정책상 회색지대).
+// ─────────────────────────────────────────────────────────────────────
+class _LuxComAdWindow extends StatefulWidget {
+  final String url;
+  const _LuxComAdWindow({required this.url});
+  @override
+  State<_LuxComAdWindow> createState() => _LuxComAdWindowState();
+}
+
+class _LuxComAdWindowState extends State<_LuxComAdWindow> {
+  static const double _w = 340;
+  static const double _h = 290;
+  WebviewController? _controller;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+  }
+
+  // 화면 우측하단으로 자기 자신을 이동 + 표시. (setFrame 은 논리 좌표 — RustDesk 관례)
+  Future<void> _placeBottomRight() async {
+    const margin = 16.0;
+    const taskbar = 52.0; // 윈도우 작업표시줄 회피
+    double sw = 1920, sh = 1080; // 화면 크기 조회 실패 시 기본값
+    try {
+      final d = WidgetsBinding.instance.platformDispatcher.views.first.display;
+      final dpr = d.devicePixelRatio <= 0 ? 1.0 : d.devicePixelRatio;
+      sw = d.size.width / dpr;
+      sh = d.size.height / dpr;
+    } catch (_) {}
+    final id = kWindowId;
+    if (id == null) return;
+    try {
+      await WindowController.fromWindowId(id).setFrame(
+          Rect.fromLTWH(sw - _w - margin, sh - _h - taskbar, _w, _h));
+      await WindowController.fromWindowId(id).show();
+    } catch (_) {}
+  }
+
+  Future<void> _init() async {
+    await _placeBottomRight();
+    try {
+      final c = WebviewController();
+      await c.initialize();
+      await c.loadUrl(widget.url);
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() {
+        _controller = c;
+        _ready = true;
+      });
+    } catch (_) {
+      // WebView2 미설치/로드 실패 → 창 닫기 (앱 동작엔 영향 없음)
+      _closeWindow();
+    }
+  }
+
+  void _closeWindow() {
+    try {
+      _controller?.dispose();
+    } catch (_) {}
+    _controller = null;
+    final id = kWindowId;
+    if (id != null) {
+      try {
+        WindowController.fromWindowId(id).close();
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            // 상단 바: '광고' 라벨 + 닫기(✕)
+            Container(
+              height: 28,
+              color: const Color(0xFFEFEFF4),
+              child: Row(
+                children: [
+                  const SizedBox(width: 11),
+                  const Text('광고',
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Spacer(),
+                  InkWell(
+                    onTap: _closeWindow,
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      child:
+                          Icon(Icons.close, size: 16, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: (_ready && c != null)
+                  ? Webview(c)
+                  : const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
