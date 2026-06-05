@@ -23,6 +23,7 @@ import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 import '../widgets/button.dart';
@@ -1128,6 +1129,60 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
 
   bool get _on => bind.mainGetOptionSync(key: 'luxcom-standby') == 'Y';
   String get _pcName => bind.mainGetOptionSync(key: 'luxcom-standby-name');
+
+  // [LUXCOM] 스탠바이 ON 일 때 채널·번호·PC명을 luxauth 에 주기 보고 → 기사 앱 목록에 표시.
+  static const String _luxAuthBase = 'https://luxcom.kr/luxauth';
+  Timer? _presenceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureChannelFromFilename();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reportPresence());
+    _presenceTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _reportPresence());
+  }
+
+  @override
+  void dispose() {
+    _presenceTimer?.cancel();
+    super.dispose();
+  }
+
+  // 파일명(remote-0010c.exe)에서 채널 번호를 한 번 읽어 옵션에 저장(설치 후에도 유지).
+  void _ensureChannelFromFilename() {
+    try {
+      final base =
+          Platform.resolvedExecutable.split(Platform.pathSeparator).last;
+      final m = RegExp(r'remote[-_]?(\d+)c', caseSensitive: false)
+          .firstMatch(base);
+      if (m != null) {
+        final ch = int.parse(m.group(1)!).toString(); // 0010 → 10
+        bind.mainSetOption(key: 'luxcom-channel', value: ch);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _reportPresence() async {
+    try {
+      if (bind.mainGetOptionSync(key: 'luxcom-standby') != 'Y') return;
+      final channel = bind.mainGetOptionSync(key: 'luxcom-channel').trim();
+      if (channel.isEmpty) return;
+      final id = (await bind.mainGetMyId()).replaceAll(' ', '');
+      if (id.isEmpty) return;
+      var name = bind.mainGetOptionSync(key: 'luxcom-standby-name').trim();
+      if (name.isEmpty) {
+        try {
+          name = Platform.localHostname;
+        } catch (_) {}
+      }
+      await http
+          .post(Uri.parse('$_luxAuthBase/api/presence'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'channel': channel, 'id': id, 'name': name}))
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
 
   void _enable() {
     final nameCtrl = TextEditingController(text: _pcName);

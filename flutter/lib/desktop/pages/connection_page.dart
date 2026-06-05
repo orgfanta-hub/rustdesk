@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
@@ -314,19 +315,12 @@ class _ConnectionPageState extends State<ConnectionPage>
                 Flexible(child: _buildRemoteIDTextField(context)),
               ],
             ).marginOnly(top: 22),
-            // [LUXCOM] 컴팩트: 계정 로그인/주소록/검색 탭(PeerTabPage) 제거 →
-            // 번호 입력 연결 + "최근 접속한 PC" 목록만 (ScreenConnect식 세션 목록).
-            const SizedBox(height: 18),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.only(right: 12, bottom: 2),
-                child: Text("최근 접속한 PC",
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
+            // [LUXCOM] 시트롤式: 번호 입력 연결 + 내 채널의 스탠바이(대기) 고객 목록.
+            //  목록 줄 클릭 → 해당 고객에게 바로 접속(connect).
+            const SizedBox(height: 16),
+            Expanded(
+              child: _LuxComStandbyList(onPick: (id) => connect(context, id)),
             ),
-            const SizedBox(height: 6),
-            Expanded(child: RecentPeersView()),
           ],
         ).paddingOnly(left: 12.0)),
         if (!isOutgoingOnly) const Divider(height: 1),
@@ -621,5 +615,224 @@ class _ConnectionPageState extends State<ConnectionPage>
     );
     return Container(
         constraints: const BoxConstraints(maxWidth: 600), child: w);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// [LUXCOM] 기사 앱 내 스탠바이 목록 패널 (시트롤式).
+//  기사 로그인 세션으로 luxauth /api/standby 를 15초마다 폴링 → 내 채널의
+//  대기(스탠바이) 고객 목록 표시. 줄/버튼 클릭 시 onPick(id) → connect.
+//  세션 토큰 = LuxComGate 가 저장한 local option 'luxcom_session_token'.
+// ─────────────────────────────────────────────────────────────────────
+class _LuxComStandbyList extends StatefulWidget {
+  final void Function(String id) onPick;
+  const _LuxComStandbyList({required this.onPick});
+  @override
+  State<_LuxComStandbyList> createState() => _LuxComStandbyListState();
+}
+
+class _LuxComStandbyListState extends State<_LuxComStandbyList> {
+  static const String _luxAuthBase = 'https://luxcom.kr/luxauth';
+  static const Color _accent = Color(0xFF4F46E5);
+  Timer? _timer;
+  List<dynamic> _clients = [];
+  String _channel = '';
+  bool _loading = true;
+  String _err = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _poll();
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _token() {
+    try {
+      return bind.mainGetLocalOption(key: 'luxcom_session_token');
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<void> _poll() async {
+    final tok = _token();
+    if (tok.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _err = '기사 로그인이 필요합니다.';
+        });
+      }
+      return;
+    }
+    try {
+      final r = await http
+          .post(Uri.parse('$_luxAuthBase/api/standby'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'session': tok}))
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200) {
+        final m = jsonDecode(r.body);
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _err = '';
+            _channel = (m is Map && m['channel'] != null)
+                ? m['channel'].toString()
+                : '';
+            _clients =
+                (m is Map && m['clients'] is List) ? m['clients'] as List : [];
+          });
+        }
+      } else if (mounted) {
+        setState(() {
+          _loading = false;
+          _err = '목록을 불러올 수 없습니다 (${r.statusCode}).';
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false); // 일시 오류: 이전 목록 유지
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 10, bottom: 8),
+          child: Row(
+            children: [
+              const Text('대기 중인 고객',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(width: 8),
+              if (_channel.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: _accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Text('채널 $_channel',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _accent)),
+                ),
+              const Spacer(),
+              Text('${_clients.length}명',
+                  style: TextStyle(fontSize: 12.5, color: theme.hintColor)),
+              IconButton(
+                tooltip: '새로고침',
+                icon: const Icon(Icons.refresh, size: 18),
+                splashRadius: 18,
+                onPressed: _poll,
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: _body(theme)),
+      ],
+    );
+  }
+
+  Widget _body(ThemeData theme) {
+    if (_loading) {
+      return const Center(
+          child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+    if (_clients.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            _err.isNotEmpty
+                ? _err
+                : '대기 중인 고객이 없습니다.\n고객이 받은 프로그램을 실행하면 여기에 표시됩니다.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.hintColor, fontSize: 13, height: 1.6),
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.only(right: 8, bottom: 8),
+      itemCount: _clients.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
+      itemBuilder: (_, i) {
+        final c = _clients[i] as Map;
+        final id = (c['id'] ?? '').toString();
+        final name = (c['name'] ?? '').toString();
+        return Material(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => widget.onPick(id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.dividerColor),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF16C47F), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name.isEmpty ? '(이름 없음)' : name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        const SizedBox(height: 2),
+                        Text('번호 $id',
+                            style: TextStyle(
+                                fontSize: 12.5, color: theme.hintColor)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => widget.onPick(id),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9)),
+                    ),
+                    child: const Text('접속',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
