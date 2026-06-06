@@ -6,7 +6,7 @@
     "idServer": "405.kr",
     "key": "NZ88DqGh4p9TlkfKfTRxtP70rEI3vZsVZGxQ7TFzqPU=",
     "ownedDomains": ["luxcom.kr", "405.kr"],
-    "_note": "idServer = 클라에 박히는 주 중계서버 = 405.kr → 오라클 클라우드 무료(춘천) VM 134.185.120.95 (hbbs/hbbr, systemd). 405.kr A레코드 → 134.185.120.95 (hosting.kr 에서 사장님 설정). key = 오라클 hbbs id_ed25519.pub (NZ88...). 두 프로필 공통. 구: luxcom.kr/NAS(mhWqt...) — 기존 깔린 클라용으로 NAS 중계 당분간 병행, 추후 폐기. auth.loginUrl(기사 로그인)은 NAS luxcom.kr 그대로."
+    "_note": "idServer = 클라에 박히는 주 중계서버 = 405.kr → 오라클 클라우드 무료(춘천) VM 134.185.120.95 (hbbs/hbbr, systemd). 405.kr A레코드 → 134.185.120.95 (hosting.kr 에서 사장님 설정). key = 오라클 hbbs id_ed25519.pub (NZ88...). 두 프로필 공통. 구: luxcom.kr/NAS(mhWqt...) — 기존 깔린 클라용으로 NAS 중계 당분간 병행, 추후 폐기. auth.loginUrl(기사 로그인)도 405.kr/luxauth 로 이전됨(2026-06-06)."
   },
 
   "contact": {
@@ -28,8 +28,8 @@
   },
 
   "auth": {
-    "loginUrl": "https://luxcom.kr/luxauth",
-    "_note": "기사용(staff) 로그인 게이트가 호출하는 NAS 인증서버. POST {loginUrl}/api/login. 별도 DNS 없이 기존 luxcom.kr 서브경로로 노출(NPM proxy host id7 luxcom.kr 의 custom location /luxauth → 192.168.0.160:8091, 기존 SSL 재사용). 관리자 웹: {loginUrl}/admin. NAS 컨테이너 lux-auth(host 8091→컨테이너 8090) BASE_PATH=/luxauth. (8090 은 torrent.luxcom.kr 선점)"
+    "loginUrl": "https://405.kr/luxauth",
+    "_note": "기사 로그인 게이트 + 채널 presence 인증서버. POST {loginUrl}/api/login, 관리자 웹 {loginUrl}/admin. 2026-06-06 NAS→Oracle(405.kr) 이전: Caddy handle /luxauth/* → localhost:8090 (Node systemd luxauth, /opt/luxauth, /etc/luxauth.env, DATA_DIR /var/lib/luxauth, MemoryMax 160M). 구 NAS lux-auth(8091)는 기존 클라용 당분간 병행."
   },
 
   "logo": {

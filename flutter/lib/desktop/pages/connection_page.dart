@@ -632,7 +632,7 @@ class _LuxComStandbyList extends StatefulWidget {
 }
 
 class _LuxComStandbyListState extends State<_LuxComStandbyList> {
-  static const String _luxAuthBase = 'https://luxcom.kr/luxauth';
+  static const String _luxAuthBase = 'https://405.kr/luxauth';
   static const Color _accent = Color(0xFF4F46E5);
   Timer? _timer;
   List<dynamic> _clients = [];

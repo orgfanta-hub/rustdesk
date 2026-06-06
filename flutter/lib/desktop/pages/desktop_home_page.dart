@@ -1131,7 +1131,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   String get _pcName => bind.mainGetOptionSync(key: 'luxcom-standby-name');
 
   // [LUXCOM] 스탠바이 ON 일 때 채널·번호·PC명을 luxauth 에 주기 보고 → 기사 앱 목록에 표시.
-  static const String _luxAuthBase = 'https://luxcom.kr/luxauth';
+  static const String _luxAuthBase = 'https://405.kr/luxauth';
   Timer? _presenceTimer;
 
   @override
