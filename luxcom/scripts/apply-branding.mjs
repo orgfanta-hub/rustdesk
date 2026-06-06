@@ -257,41 +257,80 @@ if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   log('SKIP', '홈화면 연락처', '이 프로필은 연락처 표기 안 함');
 }
 
-// ── [기사 로그인 게이트] staff 전용: NAS 인증서버 로그인 후에만 사용 ──
-// 메인 창(DesktopTabPage)을 LuxComGate 로 감싼다. 소비자용(수신전용)은 미적용.
-if (prof.requireLogin && cfg.auth && cfg.auth.loginUrl) {
+// ── [공통] 버전 게이트(강제 업데이트) + (기사) 로그인 게이트 ──
+// 메인 창(DesktopTabPage)을 LuxComVersionGate 로 감싼다(양 프로필).
+// staff 는 안쪽에 LuxComGate(채널 인증)도 추가 → 버전OK → 로그인 → 사용.
+{
   const MAIN = path.join('flutter', 'lib', 'main.dart');
-  const authUrl = String(cfg.auth.loginUrl).replace(/\/+$/, '');
-  // 1) 게이트 위젯 파일 복사(+ 인증 URL 치환)
-  (function copyGate() {
-    const label = '기사 로그인 게이트 위젯';
-    const src = path.join(builderRoot, 'staff', 'luxcom_gate.dart');
-    const dst = path.join(repoDir, 'flutter', 'lib', 'luxcom_gate.dart');
+
+  // 빌드 시리얼: YYYYMMDDHHmm(UTC) 정수. version.json 의 minSerial 과 비교해 강제 업데이트 판정.
+  const _d = new Date();
+  const _p2 = (n) => String(n).padStart(2, '0');
+  const buildSerial = Number(
+    `${_d.getUTCFullYear()}${_p2(_d.getUTCMonth() + 1)}${_p2(_d.getUTCDate())}${_p2(_d.getUTCHours())}${_p2(_d.getUTCMinutes())}`
+  );
+  const versionUrl = (cfg.versionCheck && cfg.versionCheck.url) ? String(cfg.versionCheck.url) : '';
+
+  // 1) 버전 게이트 위젯 복사(+ 시리얼/URL/프로필 치환) — 양 프로필 공통
+  (function copyVersionGate() {
+    const label = '버전 게이트 위젯(강제 업데이트)';
+    const src = path.join(builderRoot, 'common', 'luxcom_version.dart');
+    const dst = path.join(repoDir, 'flutter', 'lib', 'luxcom_version.dart');
     if (!fs.existsSync(src)) {
       log('WARN', label, `원본 없음: ${path.relative(builderRoot, src)}`);
       hardFail = true;
       return;
     }
-    const code = fs.readFileSync(src, 'utf8').replace(/__LUX_AUTH_URL__/g, authUrl);
+    const code = fs.readFileSync(src, 'utf8')
+      .replace(/__LUX_BUILD_SERIAL__/g, String(buildSerial))
+      .replace(/__LUX_VERSION_URL__/g, versionUrl)
+      .replace(/__LUX_PROFILE__/g, profileName);
     fs.writeFileSync(dst, code);
-    log('OK', label, `flutter/lib/luxcom_gate.dart (auth=${authUrl})`);
+    log('OK', label, `flutter/lib/luxcom_version.dart (serial=${buildSerial}, url=${versionUrl || '(미설정=검사 안 함)'})`);
   })();
-  // 2) main.dart import 추가
+  // 2) main.dart 버전 게이트 import (항상)
   patch(
-    MAIN, '로그인 게이트 import',
+    MAIN, '버전 게이트 import',
     /^import 'consts\.dart';/m,
-    `import 'luxcom_gate.dart';\nimport 'consts.dart';`,
+    `import 'luxcom_version.dart';\nimport 'consts.dart';`,
     { required: true }
   );
-  // 3) 메인 창 home 을 게이트로 감싸기 (데스크톱 main 창에만 적용)
+
+  // 3) (기사) 로그인 게이트 위젯 복사 + import
+  let inner = 'DesktopTabPage()';
+  if (prof.requireLogin && cfg.auth && cfg.auth.loginUrl) {
+    const authUrl = String(cfg.auth.loginUrl).replace(/\/+$/, '');
+    (function copyGate() {
+      const label = '기사 로그인 게이트 위젯';
+      const src = path.join(builderRoot, 'staff', 'luxcom_gate.dart');
+      const dst = path.join(repoDir, 'flutter', 'lib', 'luxcom_gate.dart');
+      if (!fs.existsSync(src)) {
+        log('WARN', label, `원본 없음: ${path.relative(builderRoot, src)}`);
+        hardFail = true;
+        return;
+      }
+      const code = fs.readFileSync(src, 'utf8').replace(/__LUX_AUTH_URL__/g, authUrl);
+      fs.writeFileSync(dst, code);
+      log('OK', label, `flutter/lib/luxcom_gate.dart (auth=${authUrl})`);
+    })();
+    patch(
+      MAIN, '로그인 게이트 import',
+      /^import 'luxcom_version\.dart';/m,
+      `import 'luxcom_gate.dart';\nimport 'luxcom_version.dart';`,
+      { required: true }
+    );
+    inner = 'LuxComGate(child: DesktopTabPage())';
+  } else {
+    log('SKIP', '기사 로그인 게이트', prof.requireLogin ? 'auth.loginUrl 미설정' : '이 프로필은 로그인 불필요');
+  }
+
+  // 4) 메인 창 home 래핑: 버전게이트(+ staff 면 로그인게이트)
   patch(
-    MAIN, '메인 창 로그인 게이트 적용',
+    MAIN, '메인 창 게이트 적용(버전+로그인)',
     /\?\s*const DesktopTabPage\(\)/,
-    `? const LuxComGate(child: DesktopTabPage())`,
+    `? const LuxComVersionGate(child: ${inner})`,
     { required: true }
   );
-} else {
-  log('SKIP', '기사 로그인 게이트', prof.requireLogin ? 'auth.loginUrl 미설정' : '이 프로필은 로그인 불필요');
 }
 
 // ── 리포트 ─────────────────────────────────────────────────────────

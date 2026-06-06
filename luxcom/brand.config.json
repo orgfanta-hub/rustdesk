@@ -32,6 +32,11 @@
     "_note": "기사 로그인 게이트 + 채널 presence 인증서버. POST {loginUrl}/api/login, 관리자 웹 {loginUrl}/admin. 2026-06-06 NAS→Oracle(405.kr) 이전: Caddy handle /luxauth/* → localhost:8090 (Node systemd luxauth, /opt/luxauth, /etc/luxauth.env, DATA_DIR /var/lib/luxauth, MemoryMax 160M). 구 NAS lux-auth(8091)는 기존 클라용 당분간 병행."
   },
 
+  "versionCheck": {
+    "url": "https://405.kr/version.json",
+    "_note": "강제 업데이트. 클라가 시작 시 이 정적 JSON 을 GET → 자기 buildSerial(YYYYMMDDHHmm, UTC, 빌드 시 주입) 이 해당 profile 의 minSerial 보다 작으면 '업데이트 필요' 전체화면 차단. minSerial 올리면 그 이전 빌드 전부 차단(0=차단 안 함). Caddy file_server(/var/www/405/version.json) 정적 = 서버 부하 0. fail-open(서버/네트워크 오류 시 통과). 광고 버전 배포 후 minSerial 을 그 빌드 시리얼로 올리면 구버전(광고 없는) 강제 교체."
+  },
+
   "logo": {
     "ico": "assets/app_icon.ico",
     "png": "assets/logo.png",
