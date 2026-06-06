@@ -221,7 +221,7 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
                       errorBuilder: (_, __, ___) => const Icon(Icons.shield_outlined, color: _kAccent, size: 56)),
                 ),
                 const SizedBox(height: 16),
-                const Center(child: Text('LuxCom 원격관리', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.3))),
+                const Center(child: Text('405 원격관리', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.3))),
                 const SizedBox(height: 5),
                 const Center(child: Text('인증된 기사만 사용할 수 있습니다', style: TextStyle(color: _kSub, fontSize: 13))),
                 const SizedBox(height: 24),

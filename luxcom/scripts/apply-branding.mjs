@@ -97,6 +97,17 @@ if (prof.receiveOnly) {
 } else {
   log('SKIP', '수신전용 패치', '사업자(풀기능) 프로필 — 외부 제어 기능 유지');
 }
+// ── [공통] RustDesk 계정 로그인 제거 ──────────────────────────────
+// is_disable_account()=true 강제 → 설정의 '계정' 탭/로그인 다이얼로그, 주소록·그룹 탭,
+// 세션 툴바 로그인 항목이 모두 숨겨짐. 소비자·기사 공통.
+// (기사용 LuxComGate 채널 인증 로그인은 별개 위젯이라 영향 없음 — 유지됨)
+patch(
+  CONFIG_RS, '계정 로그인 비활성(is_disable_account → true)',
+  /pub fn is_disable_account\(\)\s*->\s*bool\s*\{/,
+  (m) => `#[allow(unreachable_code)]\n${m}\n    return true; // [LUXCOM] RustDesk 계정 로그인 제거`,
+  { required: true }
+);
+
 // ── [브랜딩] 앱 이름 ───────────────────────────────────────────────
 patch(
   CONFIG_RS, '앱 이름(APP_NAME) 리브랜딩',

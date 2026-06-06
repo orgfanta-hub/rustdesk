@@ -50,7 +50,7 @@
     },
     "staff": {
       "_desc": "사업자(기사)용 — 원격을 '걸고 받는' 풀기능.",
-      "productName": "LuxCom 원격관리",
+      "productName": "405 원격관리",
       "companyName": "럭스시스템",
       "copyright": "Copyright (C) 럭스시스템",
       "receiveOnly": false,
