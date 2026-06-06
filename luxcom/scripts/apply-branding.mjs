@@ -333,6 +333,34 @@ if (prof.showContact && cfg.contact && cfg.contact.businessName) {
   );
 }
 
+// ── [공통] 자동 업데이트 → 405.kr 연동 ─────────────────────────────
+// RustDesk 내장 updater.rs 를 우리 서버로 연결.
+//  (1) 버전점검 URL: api.rustdesk.com/version/latest → {urlBase}/{profile}/latest
+//  (2) 요청을 POST(JSON) → GET 으로 (Caddy 정적 JSON 이 응답하도록; 서버 부하 0)
+//  (3) Cargo 버전 = releaseVersion (crate::VERSION; 자기 자신을 새 버전으로 오인해 무한 업데이트하는 것 방지)
+if (cfg.update && cfg.update.urlBase) {
+  const updateBase = String(cfg.update.urlBase).replace(/\/+$/, '');
+  // (1) hbb_common 의 버전점검 URL (서브모듈 — config.rs 와 동일하게 빌드 시 패치)
+  patch(
+    path.join('libs', 'hbb_common', 'src', 'lib.rs'),
+    '자동업뎃 점검 URL → 405.kr',
+    /"https:\/\/api\.rustdesk\.com\/version\/latest"/,
+    `"${updateBase}/${profileName}/latest"`,
+    { required: true }
+  );
+  // (2) common.rs: POST(JSON) → GET, 미사용 변수 정리
+  const COMMON_RS = path.join('src', 'common.rs');
+  patch(COMMON_RS, '자동업뎃 점검 미사용 변수(_request)', /let \(request, url\) =/, 'let (_request, url) =');
+  patch(COMMON_RS, '자동업뎃 점검 POST→GET', /\.post\(&url\)\.json\(&request\)\.send\(\)/g, '.get(&url).send()', { required: true });
+  // (3) 빌드 버전 = releaseVersion (동일하면 SKIP)
+  const rel = String(cfg.update.releaseVersion || '').trim();
+  if (rel) {
+    patch('Cargo.toml', `빌드 버전 = ${rel} (crate::VERSION)`, /^version = "[^"]*"/m, `version = "${rel}"`);
+  }
+} else {
+  log('SKIP', '자동 업데이트 405.kr 연동', 'cfg.update.urlBase 미설정');
+}
+
 // ── 리포트 ─────────────────────────────────────────────────────────
 const okCount = report.filter(r => r.status === 'OK').length;
 const reportMd = [
