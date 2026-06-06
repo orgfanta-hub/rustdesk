@@ -2331,6 +2331,22 @@ impl Connection {
                         }
                     }
                 }
+                // [LUXCOM] 파일전송 연결: 이미 화면제어(Remote) 세션이 활성이면 프롬프트 없이 자동 수락(소비자 수신전용).
+                // 활성 제어 세션이 없으면 그대로 프롬프트 → 제어를 이미 허락한 상대에게만 무확인 파일전송(보안 유지).
+                if hbb_common::config::is_incoming_only() && self.file_transfer.is_some() {
+                    let lux_has_remote = AUTHED_CONNS
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|c| c.conn_type == AuthConnType::Remote);
+                    if lux_has_remote {
+                        if !self.send_logon_response_and_keep_alive().await {
+                            return false;
+                        }
+                        self.try_start_cm(lr.my_id.clone(), lr.my_name.clone(), true);
+                        return true;
+                    }
+                }
                 self.try_start_cm(lr.my_id, lr.my_name, false);
                 if hbb_common::get_version_number(&lr.version)
                     >= hbb_common::get_version_number("1.2.0")
