@@ -1126,7 +1126,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   bool get _on => bind.mainGetOptionSync(key: 'luxcom-standby') == 'Y';
   String get _pcName => bind.mainGetOptionSync(key: 'luxcom-standby-name');
 
-  // [LUXCOM] 스탠바이 ON 일 때 채널·번호·PC명을 luxauth 에 주기 보고 → 기사 앱 목록에 표시.
+  // [LUXCOM] 앱 실행 중(채널 지정 시) 채널·번호·PC명을 luxauth 에 주기 보고 → 기사 앱 목록에 표시.
   static const String _luxAuthBase = 'https://405.kr/luxauth';
   Timer? _presenceTimer;
   String _version = '';
@@ -1150,24 +1150,31 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   }
 
   // 파일명(remote-0010c.exe)에서 채널 번호를 한 번 읽어 옵션에 저장(설치 후에도 유지).
-  void _ensureChannelFromFilename() {
+  Future<void> _ensureChannelFromFilename() async {
     try {
       // 사용자가 채널을 직접 지정(변경)했으면 파일명으로 덮어쓰지 않음 — 수동 우선.
       if (bind.mainGetOptionSync(key: 'luxcom-channel-manual') == 'Y') return;
-      final base =
-          Platform.resolvedExecutable.split(Platform.pathSeparator).last;
+      // 포터블 exe 는 임시폴더에 풀려 실행 → resolvedExecutable 은 원본 파일명이 아님.
+      // 포터블 런처(libs/portable execute())가 원본 파일명을 RUSTDESK_APPNAME 환경변수로 전달.
+      var base = (Platform.environment['RUSTDESK_APPNAME'] ?? '').trim();
+      if (base.isEmpty) {
+        base = Platform.resolvedExecutable.split(Platform.pathSeparator).last;
+      }
       final m = RegExp(r'remote[-_]?(\d+)c', caseSensitive: false)
           .firstMatch(base);
       if (m != null) {
         final ch = int.parse(m.group(1)!).toString(); // 0010 → 10
-        bind.mainSetOption(key: 'luxcom-channel', value: ch);
+        await bind.mainSetOption(key: 'luxcom-channel', value: ch);
+        if (mounted) setState(() {});
+        _reportPresence(); // 채널 잡히면 즉시 보고(30초 안 기다림)
       }
     } catch (_) {}
   }
 
   Future<void> _reportPresence() async {
     try {
-      if (bind.mainGetOptionSync(key: 'luxcom-standby') != 'Y') return;
+      // [LUXCOM] 앱이 열려 있고 채널이 지정돼 있으면 보고(스탠바이 ON 아니어도) → 기사 목록에 노출.
+      //   스탠바이는 '무인 자동수락' 여부일 뿐, 목록 노출 조건이 아님.
       final channel = bind.mainGetOptionSync(key: 'luxcom-channel').trim();
       if (channel.isEmpty) return;
       final id = (await bind.mainGetMyId()).replaceAll(' ', '');
