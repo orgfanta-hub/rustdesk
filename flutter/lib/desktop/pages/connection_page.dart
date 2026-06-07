@@ -644,7 +644,7 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
   void initState() {
     super.initState();
     _poll();
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) => _poll());
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _poll());
   }
 
   @override

@@ -233,6 +233,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               ),
             ),
             const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(left: 22, bottom: 8),
+              child: Text('빌드 0608-1',
+                  style: TextStyle(fontSize: 10.5, color: muted)),
+            ),
           ],
         ),
       ),
@@ -1151,14 +1156,18 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
     super.dispose();
   }
 
-  // 종료/이탈 시 즉시 오프라인 통지(채널+번호). 응답은 안 기다림(앱 종료 중이라 best-effort).
-  void _reportOffline() {
+  // 종료/이탈/스탠바이끄기 시 즉시 오프라인 통지(채널+번호) → 기사 목록에서 바로 제거.
+  Future<void> _reportOffline() async {
     try {
       final channel = bind.mainGetOptionSync(key: 'luxcom-channel').trim();
-      if (channel.isEmpty || _myId.isEmpty) return;
-      http.post(Uri.parse('$_luxAuthBase/api/offline'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'channel': channel, 'id': _myId}));
+      var id = _myId;
+      if (id.isEmpty) id = (await bind.mainGetMyId()).replaceAll(' ', '');
+      if (channel.isEmpty || id.isEmpty) return;
+      await http
+          .post(Uri.parse('$_luxAuthBase/api/offline'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'channel': channel, 'id': id}))
+          .timeout(const Duration(seconds: 5));
     } catch (_) {}
   }
 
@@ -1299,6 +1308,11 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
         // 서비스로 설치 → 재부팅에도 항상 자동 시작. (Windows 권한창 1회)
         await bind.installInstallMe(
             options: 'desktopicon startmenu', path: bind.installInstallPath());
+        // [LUXCOM] 스탠바이=트레이 백그라운드 에이전트 → 창 숨김(작업표시줄에서 사라짐).
+        //   트레이 아이콘은 설치 상태에서 RustDesk 가 자동 실행. 다시 열기=트레이 또는 아이콘 재실행.
+        try {
+          await windowManager.hide();
+        } catch (_) {}
       }
 
       return CustomAlertDialog(
@@ -1376,8 +1390,10 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
     gFFI.dialogManager.show((setDlg, close, context) {
       doDisable() async {
         close();
+        await _reportOffline(); // [LUXCOM] 끄는 즉시 기사 대기목록에서 제거(이전 이력 삭제)
         // 무인 접속 해제 → 일회성(수락) 방식으로 복귀
         await bind.mainSetOption(key: 'luxcom-standby', value: '');
+        await bind.mainSetOption(key: 'luxcom-standby-name', value: ''); // 이전 이름(이력) 제거
         await bind.mainSetPermanentPassword(password: '');
         await bind.mainSetOption(key: 'approve-mode', value: 'click');
         await bind.mainSetOption(key: 'verification-method', value: '');
@@ -1444,7 +1460,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
           // [LUXCOM] 버전 · 현재 채널 + 변경
           Row(
             children: [
-              Text('버전 ${_version.isEmpty ? "…" : "v$_version"}',
+              Text('버전 ${_version.isEmpty ? "…" : "v$_version"} · 빌드 0608-1',
                   style: const TextStyle(fontSize: 11, color: Colors.grey)),
               const SizedBox(width: 8),
               Builder(builder: (_) {
