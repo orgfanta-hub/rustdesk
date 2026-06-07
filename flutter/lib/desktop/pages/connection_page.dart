@@ -644,7 +644,7 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
   void initState() {
     super.initState();
     _poll();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) => _poll());
   }
 
   @override
@@ -775,6 +775,7 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
         final c = _clients[i] as Map;
         final id = (c['id'] ?? '').toString();
         final name = (c['name'] ?? '').toString();
+        final standby = c['standby'] == true; // true=스탠바이(상주·무인), false=일반(수락 필요)
         return Material(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(10),
@@ -792,19 +793,47 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
                   Container(
                     width: 9,
                     height: 9,
-                    decoration: const BoxDecoration(
-                        color: Color(0xFF16C47F), shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                        color: standby
+                            ? const Color(0xFF16C47F)
+                            : const Color(0xFFF59E0B),
+                        shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name.isEmpty ? '(이름 없음)' : name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(name.isEmpty ? '(이름 없음)' : name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                  color: (standby
+                                          ? const Color(0xFF16C47F)
+                                          : const Color(0xFFF59E0B))
+                                      .withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6)),
+                              child: Text(standby ? '상주' : '일반',
+                                  style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: standby
+                                          ? const Color(0xFF0E9F6E)
+                                          : const Color(0xFFB45309))),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 2),
                         Text('번호 $id',
                             style: const TextStyle(

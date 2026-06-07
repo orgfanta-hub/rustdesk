@@ -1130,6 +1130,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   static const String _luxAuthBase = 'https://405.kr/luxauth';
   Timer? _presenceTimer;
   String _version = '';
+  String _myId = ''; // 종료 시 offline 통지에 쓸 내 번호 캐시
 
   @override
   void initState() {
@@ -1140,13 +1141,25 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _reportPresence());
     _presenceTimer =
-        Timer.periodic(const Duration(seconds: 30), (_) => _reportPresence());
+        Timer.periodic(const Duration(seconds: 15), (_) => _reportPresence());
   }
 
   @override
   void dispose() {
     _presenceTimer?.cancel();
+    _reportOffline(); // 종료 시 즉시 오프라인 통지(best-effort) → 기사 목록서 바로 사라짐
     super.dispose();
+  }
+
+  // 종료/이탈 시 즉시 오프라인 통지(채널+번호). 응답은 안 기다림(앱 종료 중이라 best-effort).
+  void _reportOffline() {
+    try {
+      final channel = bind.mainGetOptionSync(key: 'luxcom-channel').trim();
+      if (channel.isEmpty || _myId.isEmpty) return;
+      http.post(Uri.parse('$_luxAuthBase/api/offline'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'channel': channel, 'id': _myId}));
+    } catch (_) {}
   }
 
   // 파일명(remote-0010c.exe)에서 채널 번호를 한 번 읽어 옵션에 저장(설치 후에도 유지).
@@ -1179,6 +1192,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       if (channel.isEmpty) return;
       final id = (await bind.mainGetMyId()).replaceAll(' ', '');
       if (id.isEmpty) return;
+      _myId = id;
       var name = bind.mainGetOptionSync(key: 'luxcom-standby-name').trim();
       if (name.isEmpty) {
         try {
@@ -1188,7 +1202,8 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       await http
           .post(Uri.parse('$_luxAuthBase/api/presence'),
               headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'channel': channel, 'id': id, 'name': name}))
+              body: jsonEncode(
+                  {'channel': channel, 'id': id, 'name': name, 'standby': _on}))
           .timeout(const Duration(seconds: 10));
     } catch (_) {}
   }
