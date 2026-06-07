@@ -1415,7 +1415,8 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
 // ─────────────────────────────────────────────────────────────────────
 // [LUXCOM] 실행 시 데스크탑 화면 우측하단에 별도 광고 창을 띄움 — 소비자·기사 둘 다, 프로세스당 1회.
 //  앱 창 안이 아니라 desktop_multi_window 의 별도 창(RaiDrive식)으로 생성한다(렌더는 main.dart _LuxComAdWindow).
-//  광고 페이지(기본 luxcom.kr/ad/)에 애드센스 코드를 넣음(계정/정책 책임=사장님).
+//  광고 페이지(기본 405.kr/ad/) = 우리 쇼핑몰(luxcom.co.kr) 자체 홍보.
+//  ⚠️ 데스크탑 앱 광고창이라 구글 애드센스 금지(정책 위반=계정 정지) — 자체광고만. 애드센스는 웹페이지(405.kr) 쪽에만.
 //  옵션 'luxcom-ad-url'='off' 면 끔, 그 외 값이면 그 URL 사용. 생성/로드 실패 시 조용히 생략.
 // ─────────────────────────────────────────────────────────────────────
 class _LuxComAdOverlay extends StatefulWidget {
@@ -1441,7 +1442,7 @@ class _LuxComAdOverlayState extends State<_LuxComAdOverlay> {
   Future<void> _spawn() async {
     final opt = bind.mainGetOptionSync(key: 'luxcom-ad-url');
     if (opt == 'off') return; // 킬 스위치
-    final url = opt.isEmpty ? 'https://luxcom.kr/ad/' : opt;
+    final url = opt.isEmpty ? 'https://405.kr/ad/' : opt;
     try {
       await DesktopMultiWindow.createWindow(jsonEncode({
         'luxcom_ad': true,
