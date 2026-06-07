@@ -93,11 +93,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     }
     final children = <Widget>[
       if (!isOutgoingOnly) buildPresetPasswordWarning(),
-      if (bind.isCustomClient())
-        Align(
-          alignment: Alignment.center,
-          child: loadPowered(context),
-        ),
+      // [LUXCOM] powered-by(쇼핑몰 링크)·연락처 문구 제거 — 소비자 홈 정리. 버전·채널 정보는 스탠바이 카드에 표시.
       Align(
         alignment: Alignment.center,
         child: loadLogo(),
@@ -1133,11 +1129,15 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   // [LUXCOM] 스탠바이 ON 일 때 채널·번호·PC명을 luxauth 에 주기 보고 → 기사 앱 목록에 표시.
   static const String _luxAuthBase = 'https://405.kr/luxauth';
   Timer? _presenceTimer;
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
     _ensureChannelFromFilename();
+    bind.mainGetVersion().then((v) {
+      if (mounted) setState(() => _version = v);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _reportPresence());
     _presenceTimer =
         Timer.periodic(const Duration(seconds: 30), (_) => _reportPresence());
@@ -1152,6 +1152,8 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
   // 파일명(remote-0010c.exe)에서 채널 번호를 한 번 읽어 옵션에 저장(설치 후에도 유지).
   void _ensureChannelFromFilename() {
     try {
+      // 사용자가 채널을 직접 지정(변경)했으면 파일명으로 덮어쓰지 않음 — 수동 우선.
+      if (bind.mainGetOptionSync(key: 'luxcom-channel-manual') == 'Y') return;
       final base =
           Platform.resolvedExecutable.split(Platform.pathSeparator).last;
       final m = RegExp(r'remote[-_]?(\d+)c', caseSensitive: false)
@@ -1182,6 +1184,68 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
               body: jsonEncode({'channel': channel, 'id': id, 'name': name}))
           .timeout(const Duration(seconds: 10));
     } catch (_) {}
+  }
+
+  // [LUXCOM] 채널 직접 변경 — 기사님이 알려준 채널로(파일명 무관, 수동 우선).
+  void _changeChannel() {
+    final ctrl = TextEditingController(
+        text: bind.mainGetOptionSync(key: 'luxcom-channel'));
+    String err = '';
+    gFFI.dialogManager.show((setDlg, close, context) {
+      submit() async {
+        final ch = ctrl.text.trim();
+        if (!RegExp(r'^\d{1,6}$').hasMatch(ch)) {
+          setDlg(() => err = '채널 번호(숫자)를 입력하세요.');
+          return;
+        }
+        final norm = int.parse(ch).toString(); // 0010 → 10
+        await bind.mainSetOption(key: 'luxcom-channel', value: norm);
+        await bind.mainSetOption(key: 'luxcom-channel-manual', value: 'Y');
+        close();
+        if (mounted) setState(() {});
+        _reportPresence();
+      }
+
+      return CustomAlertDialog(
+        title: const Text('채널 변경',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('기사님이 알려준 채널 번호를 입력하세요.',
+                  style: TextStyle(fontSize: 12, height: 1.4)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: 16),
+                decoration: const InputDecoration(
+                  hintText: '예: 10',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              if (err.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(err,
+                      style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          dialogButton('취소', onPressed: close, isOutline: true),
+          dialogButton('저장', onPressed: submit),
+        ],
+        onSubmit: submit,
+        onCancel: close,
+      );
+    });
   }
 
   void _enable() {
@@ -1355,6 +1419,36 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // [LUXCOM] 버전 · 현재 채널 + 변경
+          Row(
+            children: [
+              Text('버전 ${_version.isEmpty ? "…" : "v$_version"}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              const SizedBox(width: 8),
+              Builder(builder: (_) {
+                final ch =
+                    bind.mainGetOptionSync(key: 'luxcom-channel').trim();
+                return Text('· 채널 ${ch.isEmpty ? "미지정" : ch}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: _accent,
+                        fontWeight: FontWeight.w600));
+              }),
+              const Spacer(),
+              InkWell(
+                onTap: _changeChannel,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text('채널 변경',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: _accent,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Icon(on ? Icons.shield : Icons.shield_outlined,

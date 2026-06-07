@@ -57,7 +57,7 @@
       "companyName": "럭스시스템",
       "copyright": "Copyright (C) 럭스시스템",
       "receiveOnly": true,
-      "showContact": true
+      "showContact": false
     },
     "staff": {
       "_desc": "사업자(기사)용 — 원격을 '걸고 받는' 풀기능.",

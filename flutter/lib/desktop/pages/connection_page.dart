@@ -807,8 +807,10 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
                                 fontWeight: FontWeight.w700, fontSize: 14)),
                         const SizedBox(height: 2),
                         Text('번호 $id',
-                            style: TextStyle(
-                                fontSize: 12.5, color: theme.hintColor)),
+                            style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: _accent)),
                       ],
                     ),
                   ),
