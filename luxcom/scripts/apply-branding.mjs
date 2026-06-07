@@ -123,8 +123,23 @@ patch(RC, 'EXE 속성 CompanyName',     /(VALUE "CompanyName",\s*")[^"]*(")/,   
 patch(RC, 'EXE 속성 LegalCopyright',  /(VALUE "LegalCopyright",\s*")[^"]*(")/,  `$1${prof.copyright}$2`);
 
 // ── [브랜딩] 앱 아이콘 ─────────────────────────────────────────────
+// [LUXCOM] ★EXE '파일 아이콘'(탐색기에 보이는 것) = res/icon.ico — build.rs:30 + libs/portable/build.rs:6 의 winres.set_icon("res/icon.ico") 대상.
+//   배포되는 22.7MB는 '포터블' 래퍼라 파일 아이콘이 여기서 나옴(runner/resources/app_icon.ico 는 내부 runner 용·별개).
+//   여길 안 바꾸면 다운로드 파일이 RustDesk 기본 아이콘으로 보임 → 반드시 교체.
+(function applyResIcon() {
+  const label = 'EXE 파일 아이콘 교체(res/icon.ico·포터블/메인)';
+  const icoSrc = path.join(builderRoot, cfg.logo.ico || 'assets/app_icon.ico');
+  if (!fs.existsSync(icoSrc)) { log('WARN', label, 'assets/app_icon.ico 없음 → RustDesk 기본 유지'); return; }
+  let n = 0;
+  for (const rel of ['res/icon.ico', 'res/tray-icon.ico']) {
+    const tgt = path.join(repoDir, rel);
+    if (fs.existsSync(tgt)) { fs.copyFileSync(icoSrc, tgt); n++; }
+  }
+  log(n > 0 ? 'OK' : 'WARN', label, n > 0 ? `${n}개 교체(res/icon.ico, res/tray-icon.ico)` : 'res/*.ico 없음');
+})();
+
 (function applyIcon() {
-  const label = '앱 아이콘 교체';
+  const label = '앱 아이콘 교체(runner)';
   const target = path.join(repoDir, 'flutter', 'windows', 'runner', 'resources', 'app_icon.ico');
   if (!fs.existsSync(path.dirname(target))) { log('SKIP', label, 'runner/resources 경로 없음'); return; }
   const icoSrc = path.join(builderRoot, cfg.logo.ico || 'assets/app_icon.ico');
