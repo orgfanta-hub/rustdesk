@@ -169,7 +169,11 @@ void runMainApp(bool startService) async {
     // Check the startup argument, if we successfully handle the argument, we keep the main window hidden.
     final handledByUniLinks = await initUniLinks();
     debugPrint("handled by uni links: $handledByUniLinks");
-    if (handledByUniLinks || handleUriLink(cmdArgs: kBootArgs)) {
+    // [LUXCOM] 스탠바이(상주) 모드 = 트레이 백그라운드 에이전트 → 시작 시 창 숨김(작업표시줄에도 안 뜸).
+    //   트레이 아이콘(설치 상태에서 자동 실행)으로 다시 열 수 있음. 재부팅 생존은 설치 서비스가 담당.
+    final luxStandby = bind.isIncomingOnly() &&
+        bind.mainGetOptionSync(key: 'luxcom-standby') == 'Y';
+    if (handledByUniLinks || handleUriLink(cmdArgs: kBootArgs) || luxStandby) {
       windowManager.hide();
     } else {
       windowManager.show();

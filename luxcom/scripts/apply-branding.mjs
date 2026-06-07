@@ -250,12 +250,12 @@ patch(
   /await bind\.mainCheckConnectStatus\(\);/,
   `await bind.mainCheckConnectStatus();\n  if (bind.isIncomingOnly() && bind.mainGetOptionSync(key: 'luxcom-standby') != 'Y') {\n    await bind.mainSetOption(key: kOptionApproveMode, value: 'click');\n  }`
 );
-// (B) 메인창 닫기 → 수신전용이면 트레이 숨김 대신 완전 종료(프로세스 종료=서버 중단=기사 접속 불가).
+// (B) 메인창 닫기 → 수신전용: 스탠바이(상주)면 트레이로 숨김(에이전트 유지), 아니면 완전 종료(끄면 접속 불가).
 patch(
   path.join('flutter', 'lib', 'desktop', 'widgets', 'tabbar_widget.dart'),
-  '수신전용 닫기=완전종료(끄면 접속 불가)',
+  '수신전용 닫기=스탠바이는 트레이숨김·아니면 완전종료',
   /mainWindowClose\(\) async => await windowManager\.hide\(\);/,
-  `mainWindowClose() async {\n      if (bind.isIncomingOnly()) {\n        await windowManager.setPreventClose(false);\n        await windowManager.close();\n        return;\n      }\n      await windowManager.hide();\n    }`
+  `mainWindowClose() async {\n      if (bind.isIncomingOnly()) {\n        if (bind.mainGetOptionSync(key: 'luxcom-standby') == 'Y') { await windowManager.hide(); return; }\n        await windowManager.setPreventClose(false);\n        await windowManager.close();\n        return;\n      }\n      await windowManager.hide();\n    }`
 );
 
 if (prof.showContact && cfg.contact && cfg.contact.businessName) {
