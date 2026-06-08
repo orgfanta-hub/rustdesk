@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:ffi';
+import 'package:ffi/ffi.dart';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
@@ -63,18 +65,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.build(context);
     final isIncomingOnly = bind.isIncomingOnly();
     return _buildBlock(
-        child: Stack(
+        child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            buildLeftPane(context),
-            if (!isIncomingOnly) const VerticalDivider(width: 1),
-            if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
-          ],
-        ),
-        // [LUXCOM] 실행 시 우측하단 광고(애드센스) 팝업 — 소비자·기사 둘 다, 1회
-        const _LuxComAdOverlay(),
+        buildLeftPane(context),
+        if (!isIncomingOnly) const VerticalDivider(width: 1),
+        if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
       ],
     ));
   }
@@ -146,8 +142,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         ).marginOnly(bottom: 6, right: 6),
         // [LUXCOM] 스탠바이(상주) 모드 — 켜면 무인 접속 에이전트로 상주, 끄면 제거
         const _LuxComStandbyCard().marginOnly(left: 6, right: 6, bottom: 6),
-        // [LUXCOM] 광고/홍보 자리(슬롯) — 지금은 자체 쇼핑몰 배너, 추후 콘텐츠만 교체
-        const _LuxAdSlot(),
         // [LUXCOM] 버전(종료/하단) — RustDesk 베이스 + 우리 하부버전
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 4, 12, 12),
@@ -260,8 +254,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 style: TextStyle(fontSize: 12.5, color: muted, height: 1.5),
               ),
             ),
-            const SizedBox(height: 14),
-            const _LuxAdSlot(), // [LUXCOM] 광고/홍보 자리(슬롯)
             const Spacer(),
             const Padding(
               padding: EdgeInsets.only(left: 22, bottom: 8),
@@ -1577,12 +1569,12 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
 //  기사가 원격 붙은 PC를 파악하는 데 유용(장치 설치 등). 순수 Dart 수집(콘솔창 없음):
 //  Platform / NetworkInterface / 환경변수 + 외부IP는 luxauth /api/ip.
 // ─────────────────────────────────────────────────────────────────────
-const List<String> _kSysInfoKeys = ['PC 이름', '도메인/워크그룹', '내부 IP', '외부 IP', 'Windows', '비트', 'CPU', '논리 코어'];
+const List<String> _kSysInfoKeys = ['PC 이름', '도메인/워크그룹', '내부 IP', '외부 IP', 'Windows', '비트', 'CPU', '논리 코어', 'RAM', '그래픽카드', '메인보드', '바이오스'];
 
 // [LUXCOM] 버전 라벨 — RustDesk 베이스(1.4.6) + 우리 빌드 번호(4번째 자리). 패치마다 kLuxComBuild++.
 const String kLuxRustDeskVer = '1.4.6';
-const int kLuxComBuild = 1;
-const String kLuxVerLabel = 'v$kLuxRustDeskVer.$kLuxComBuild'; // = v1.4.6.1
+const int kLuxComBuild = 2;
+const String kLuxVerLabel = 'v$kLuxRustDeskVer.$kLuxComBuild'; // = v1.4.6.2
 
 // [LUXCOM] 버전 표시(2줄) — 소비자 패널 하단 + 기사 패널 하단 공용.
 class _LuxVersionFooter extends StatelessWidget {
@@ -1603,64 +1595,85 @@ class _LuxVersionFooter extends StatelessWidget {
   }
 }
 
-// [LUXCOM] 광고/홍보 슬롯 — 데스크탑 앱엔 구글 애드센스 금지(정책 위반=계정정지).
-//  지금은 자체 쇼핑몰 배너(클릭→luxcom.co.kr), 추후 콘텐츠만 교체. 소비자·기사 공용.
-class _LuxAdSlot extends StatelessWidget {
-  const _LuxAdSlot();
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(13),
-        onTap: () {
-          try {
-            launchUrl(Uri.parse('https://luxcom.co.kr'));
-          } catch (_) {}
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(15, 13, 13, 13),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF4F46E5)]),
-            borderRadius: BorderRadius.circular(13),
-            boxShadow: [
-              BoxShadow(
-                  color: const Color(0xFF4F46E5).withOpacity(0.30),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8))
-            ],
-          ),
-          child: Row(
-            children: [
-              const Text('🖥️', style: TextStyle(fontSize: 22)),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Text('럭스시스템 컴퓨터',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800)),
-                    SizedBox(height: 3),
-                    Text('조립 PC · 부품 · A/S 온라인몰 바로가기 →',
-                        style: TextStyle(
-                            color: Color(0xFFDFE1FF),
-                            fontSize: 11,
-                            height: 1.35)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+// [LUXCOM] RAM·그래픽카드·메인보드·바이오스 — Win32 API/레지스트리로 수집(콘솔창 없음, Windows 전용).
+//  RAM=GlobalMemoryStatusEx(kernel32) / GPU·메인보드·바이오스=RegGetValueW(advapi32) HKLM 레지스트리.
+final class _MemStatusEx extends Struct {
+  @Uint32() external int dwLength;
+  @Uint32() external int dwMemoryLoad;
+  @Uint64() external int ullTotalPhys;
+  @Uint64() external int ullAvailPhys;
+  @Uint64() external int ullTotalPageFile;
+  @Uint64() external int ullAvailPageFile;
+  @Uint64() external int ullTotalVirtual;
+  @Uint64() external int ullAvailVirtual;
+  @Uint64() external int ullAvailExtendedVirtual;
+}
+
+typedef _GmsExNative = Int32 Function(Pointer<_MemStatusEx>);
+typedef _GmsExDart = int Function(Pointer<_MemStatusEx>);
+typedef _RegGetNative = Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32,
+    Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>);
+typedef _RegGetDart = int Function(int, Pointer<Utf16>, Pointer<Utf16>, int,
+    Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>);
+
+String _luxRegStr(_RegGetDart regGet, String subKey, String value) {
+  final sk = subKey.toNativeUtf16();
+  final v = value.toNativeUtf16();
+  const cap = 512;
+  final buf = calloc<Uint16>(cap);
+  final sz = calloc<Uint32>()..value = cap * 2;
+  try {
+    // HKEY_LOCAL_MACHINE=0x80000002, RRF_RT_ANY=0x0000ffff, ERROR_SUCCESS=0
+    final r = regGet(0x80000002, sk, v, 0x0000ffff, nullptr, buf.cast<Void>(), sz);
+    if (r == 0) return buf.cast<Utf16>().toDartString().trim();
+  } catch (_) {} finally {
+    calloc.free(sk);
+    calloc.free(v);
+    calloc.free(buf);
+    calloc.free(sz);
   }
+  return '';
+}
+
+Map<String, String> _luxHwInfo() {
+  final m = <String, String>{};
+  if (!Platform.isWindows) return m;
+  // RAM 총 용량
+  try {
+    final gms = DynamicLibrary.open('kernel32.dll')
+        .lookupFunction<_GmsExNative, _GmsExDart>('GlobalMemoryStatusEx');
+    final mem = calloc<_MemStatusEx>();
+    try {
+      mem.ref.dwLength = sizeOf<_MemStatusEx>();
+      if (gms(mem) != 0) {
+        final gb = mem.ref.ullTotalPhys / (1024 * 1024 * 1024);
+        if (gb > 0) m['RAM'] = '${gb.round()}GB';
+      }
+    } finally {
+      calloc.free(mem);
+    }
+  } catch (_) {}
+  // 그래픽카드·메인보드·바이오스 (레지스트리)
+  try {
+    final regGet = DynamicLibrary.open('advapi32.dll')
+        .lookupFunction<_RegGetNative, _RegGetDart>('RegGetValueW');
+    final gpu = _luxRegStr(
+        regGet,
+        r'SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000',
+        'DriverDesc');
+    if (gpu.isNotEmpty) m['그래픽카드'] = gpu;
+    const bios = r'HARDWARE\DESCRIPTION\System\BIOS';
+    final boardMfr = _luxRegStr(regGet, bios, 'BaseBoardManufacturer');
+    final boardProd = _luxRegStr(regGet, bios, 'BaseBoardProduct');
+    final board = [boardMfr, boardProd].where((s) => s.isNotEmpty).join(' ');
+    if (board.isNotEmpty) m['메인보드'] = board;
+    final biosVendor = _luxRegStr(regGet, bios, 'BIOSVendor');
+    final biosVer = _luxRegStr(regGet, bios, 'BIOSVersion');
+    final biosDate = _luxRegStr(regGet, bios, 'BIOSReleaseDate');
+    final bv = [biosVendor, biosVer].where((s) => s.isNotEmpty).join(' ');
+    if (bv.isNotEmpty) m['바이오스'] = biosDate.isNotEmpty ? '$bv ($biosDate)' : bv;
+  } catch (_) {}
+  return m;
 }
 
 Future<Map<String, String>> _gatherSysInfo() async {
@@ -1693,17 +1706,21 @@ Future<Map<String, String>> _gatherSysInfo() async {
   if (cpu.isNotEmpty) m['CPU'] = cpu;
   final cores = (env['NUMBER_OF_PROCESSORS'] ?? '').trim();
   if (cores.isNotEmpty) m['논리 코어'] = '$cores개';
+  try { m.addAll(_luxHwInfo()); } catch (_) {} // RAM·그래픽카드·메인보드·바이오스 (Win32, 콘솔창 없음)
   return m;
 }
 
 void _showLuxSysInfo(BuildContext context) {
+  // [LUXCOM] 가로 넓은 PC정보 창. 소비자(좁은 창)는 보이도록 창을 잠시 넓혔다가 닫을 때 복원.
+  final inc = bind.isIncomingOnly();
+  if (inc) { try { windowManager.setSize(const Size(680, 660)); } catch (_) {} }
   gFFI.dialogManager.show((setDlg, close, ctx) => CustomAlertDialog(
         title: const Text('이 PC 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const SizedBox(width: double.maxFinite, child: _LuxSysInfo()),
+        content: const SizedBox(width: 600, child: _LuxSysInfo()),
         actions: [dialogButton('닫기', onPressed: close)],
         onSubmit: close,
         onCancel: close,
-      ));
+      )).then((_) { if (inc) { try { windowManager.setSize(getIncomingOnlyHomeSize()); } catch (_) {} } });
 }
 
 class _LuxSysInfo extends StatefulWidget {
