@@ -235,7 +235,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             const Spacer(),
             Padding(
               padding: const EdgeInsets.only(left: 22, bottom: 8),
-              child: Text('빌드 0608-1',
+              child: Text('빌드 0608-2',
                   style: TextStyle(fontSize: 10.5, color: muted)),
             ),
           ],

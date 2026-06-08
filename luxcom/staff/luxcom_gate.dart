@@ -14,8 +14,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import 'models/platform_model.dart'; // bind.mainGetLocalOption / mainSetLocalOption
+
+// 회원가입·비밀번호 찾기 페이지를 기본 브라우저로 연다.
+void _openUrl(String url) {
+  try { launchUrl(Uri.parse(url)).catchError((e) => false); } catch (_) {}
+}
 
 const String kLuxAuthUrl = '__LUX_AUTH_URL__';
 const String _kTokKey = 'luxcom_session_token'; // 세션 토큰 저장 키
@@ -254,6 +260,23 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _openUrl('https://405.kr/signup/'),
+                      child: const Text('회원가입',
+                          style: TextStyle(color: _kSub, fontSize: 13, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: _kMuted)),
+                    ),
+                    const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('·', style: TextStyle(color: _kMuted, fontSize: 13))),
+                    GestureDetector(
+                      onTap: () => _openUrl('$kLuxAuthUrl/forgot'),
+                      child: const Text('비밀번호 찾기 / 변경',
+                          style: TextStyle(color: _kSub, fontSize: 13, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: _kMuted)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 const Center(child: Text('럭스시스템 · 계정 문의 031-393-0144', style: TextStyle(color: _kMuted, fontSize: 11.5))),
               ],
             ),
