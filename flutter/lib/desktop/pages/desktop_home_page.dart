@@ -146,13 +146,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         ).marginOnly(bottom: 6, right: 6),
         // [LUXCOM] 스탠바이(상주) 모드 — 켜면 무인 접속 에이전트로 상주, 끄면 제거
         const _LuxComStandbyCard().marginOnly(left: 6, right: 6, bottom: 6),
+        // [LUXCOM] 광고/홍보 자리(슬롯) — 지금은 자체 쇼핑몰 배너, 추후 콘텐츠만 교체
+        const _LuxAdSlot(),
+        // [LUXCOM] 버전(종료/하단) — RustDesk 베이스 + 우리 하부버전
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 4, 12, 12),
+          child: _LuxVersionFooter(),
+        ),
       ]);
     }
     final textColor = Theme.of(context).textTheme.titleLarge?.color;
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Container(
-        width: isIncomingOnly ? 280.0 : 200.0,
+        width: isIncomingOnly ? 320.0 : 200.0,
         color: Theme.of(context).colorScheme.background,
         child: Stack(
           children: [
@@ -253,11 +260,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 style: TextStyle(fontSize: 12.5, color: muted, height: 1.5),
               ),
             ),
+            const SizedBox(height: 14),
+            const _LuxAdSlot(), // [LUXCOM] 광고/홍보 자리(슬롯)
             const Spacer(),
-            Padding(
-              padding: const EdgeInsets.only(left: 22, bottom: 8),
-              child: Text('빌드 0608-3',
-                  style: TextStyle(fontSize: 10.5, color: muted)),
+            const Padding(
+              padding: EdgeInsets.only(left: 22, bottom: 8),
+              child: _LuxVersionFooter(),
             ),
           ],
         ),
@@ -307,7 +315,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                                   ?.color
                                   ?.withOpacity(0.5)),
                         ).marginOnly(top: 5),
-                        buildPopupMenu(context)
+                        // [LUXCOM] 소비자(수신전용)는 설정(⋮) 숨김 — 고객이 설정 못 들어가게
+                        if (!bind.isIncomingOnly()) buildPopupMenu(context)
                       ],
                     ),
                   ),
@@ -1167,7 +1176,8 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _reportPresence());
     _presenceTimer =
-        Timer.periodic(const Duration(seconds: 15), (_) => _reportPresence());
+        // [LUXCOM] 5s 보고 → 기사 대기목록 실시간성↑ (서버 PRESENCE_MS=16s 와 한 쌍).
+        Timer.periodic(const Duration(seconds: 5), (_) => _reportPresence());
   }
 
   @override
@@ -1481,17 +1491,14 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
           // [LUXCOM] 버전 · 현재 채널 + 변경
           Row(
             children: [
-              Text('버전 ${_version.isEmpty ? "…" : "v$_version"} · 빌드 0608-3',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(width: 8),
               Builder(builder: (_) {
                 final ch =
                     bind.mainGetOptionSync(key: 'luxcom-channel').trim();
-                return Text('· 채널 ${ch.isEmpty ? "미지정" : ch}',
+                return Text('채널 ${ch.isEmpty ? "미지정" : ch}',
                     style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 11.5,
                         color: _accent,
-                        fontWeight: FontWeight.w600));
+                        fontWeight: FontWeight.w700));
               }),
               const Spacer(),
               InkWell(
@@ -1571,6 +1578,90 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
 //  Platform / NetworkInterface / 환경변수 + 외부IP는 luxauth /api/ip.
 // ─────────────────────────────────────────────────────────────────────
 const List<String> _kSysInfoKeys = ['PC 이름', '도메인/워크그룹', '내부 IP', '외부 IP', 'Windows', '비트', 'CPU', '논리 코어'];
+
+// [LUXCOM] 버전 라벨 — RustDesk 베이스(1.4.6) + 우리 빌드 번호(4번째 자리). 패치마다 kLuxComBuild++.
+const String kLuxRustDeskVer = '1.4.6';
+const int kLuxComBuild = 1;
+const String kLuxVerLabel = 'v$kLuxRustDeskVer.$kLuxComBuild'; // = v1.4.6.1
+
+// [LUXCOM] 버전 표시(2줄) — 소비자 패널 하단 + 기사 패널 하단 공용.
+class _LuxVersionFooter extends StatelessWidget {
+  const _LuxVersionFooter();
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.45);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(kLuxVerLabel,
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c)),
+        Text('RustDesk $kLuxRustDeskVer 기반',
+            style: TextStyle(fontSize: 9.5, color: c)),
+      ],
+    );
+  }
+}
+
+// [LUXCOM] 광고/홍보 슬롯 — 데스크탑 앱엔 구글 애드센스 금지(정책 위반=계정정지).
+//  지금은 자체 쇼핑몰 배너(클릭→luxcom.co.kr), 추후 콘텐츠만 교체. 소비자·기사 공용.
+class _LuxAdSlot extends StatelessWidget {
+  const _LuxAdSlot();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: () {
+          try {
+            launchUrl(Uri.parse('https://luxcom.co.kr'));
+          } catch (_) {}
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(15, 13, 13, 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+                colors: [Color(0xFF6366F1), Color(0xFF4F46E5)]),
+            borderRadius: BorderRadius.circular(13),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFF4F46E5).withOpacity(0.30),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8))
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text('🖥️', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text('럭스시스템 컴퓨터',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800)),
+                    SizedBox(height: 3),
+                    Text('조립 PC · 부품 · A/S 온라인몰 바로가기 →',
+                        style: TextStyle(
+                            color: Color(0xFFDFE1FF),
+                            fontSize: 11,
+                            height: 1.35)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 Future<Map<String, String>> _gatherSysInfo() async {
   final m = <String, String>{};

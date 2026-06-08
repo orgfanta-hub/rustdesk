@@ -644,7 +644,7 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
   void initState() {
     super.initState();
     _poll();
-    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _poll());
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _poll()); // [LUXCOM] 2s 폴링 → 고객 접속/해제 반영 빠르게
   }
 
   @override

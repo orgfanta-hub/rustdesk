@@ -3709,7 +3709,7 @@ Widget loadIcon(double size) {
           ));
 }
 
-var imcomingOnlyHomeSize = Size(280, 300);
+var imcomingOnlyHomeSize = Size(320, 440); // [LUXCOM] 소비자 창 키움(폭320); 높이는 _updateWindowSize 가 콘텐츠에 맞춰 자동조정
 Size getIncomingOnlyHomeSize() {
   final magicWidth = isWindows ? 11.0 : 2.0;
   final magicHeight = 10.0;
