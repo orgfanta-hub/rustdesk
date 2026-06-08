@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
-import 'dart:ffi';
+import 'dart:ffi' hide Size; // [LUXCOM] dart:ffi 의 Size 는 숨김 — Flutter(dart:ui)의 Size 와 충돌 방지
 import 'package:ffi/ffi.dart';
 
 import 'package:auto_size_text/auto_size_text.dart';
