@@ -100,6 +100,16 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ),
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
+      if (isIncomingOnly)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.computer, size: 15),
+            label: const Text('이 PC 정보', style: TextStyle(fontSize: 12.5)),
+            onPressed: () => _showLuxSysInfo(context),
+            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 34)),
+          ),
+        ),
       // [LUXCOM] 소비자(수신전용)는 비밀번호 미사용(수락 방식) → 비번 칸 숨김
       if (!isOutgoingOnly && !isIncomingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(
@@ -224,6 +234,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                         horizontal: 14, vertical: 4)),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 6),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.computer, size: 14),
+                label: const Text('이 PC 정보', style: TextStyle(fontSize: 12)),
+                onPressed: () => _showLuxSysInfo(context),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4)),
+              ),
+            ),
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsets.only(left: 22, right: 16),
@@ -235,7 +256,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             const Spacer(),
             Padding(
               padding: const EdgeInsets.only(left: 22, bottom: 8),
-              child: Text('빌드 0608-2',
+              child: Text('빌드 0608-3',
                   style: TextStyle(fontSize: 10.5, color: muted)),
             ),
           ],
@@ -1460,7 +1481,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
           // [LUXCOM] 버전 · 현재 채널 + 변경
           Row(
             children: [
-              Text('버전 ${_version.isEmpty ? "…" : "v$_version"} · 빌드 0608-1',
+              Text('버전 ${_version.isEmpty ? "…" : "v$_version"} · 빌드 0608-3',
                   style: const TextStyle(fontSize: 11, color: Colors.grey)),
               const SizedBox(width: 8),
               Builder(builder: (_) {
@@ -1540,6 +1561,105 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
             ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// [LUXCOM] 이 PC 정보 — PC명·도메인/워크그룹·내부/외부IP·Windows·비트·CPU.
+//  기사가 원격 붙은 PC를 파악하는 데 유용(장치 설치 등). 순수 Dart 수집(콘솔창 없음):
+//  Platform / NetworkInterface / 환경변수 + 외부IP는 luxauth /api/ip.
+// ─────────────────────────────────────────────────────────────────────
+const List<String> _kSysInfoKeys = ['PC 이름', '도메인/워크그룹', '내부 IP', '외부 IP', 'Windows', '비트', 'CPU', '논리 코어'];
+
+Future<Map<String, String>> _gatherSysInfo() async {
+  final m = <String, String>{};
+  final env = Platform.environment;
+  try { m['PC 이름'] = Platform.localHostname; } catch (_) {}
+  final dom = (env['USERDOMAIN'] ?? '').trim();
+  final comp = (env['COMPUTERNAME'] ?? '').trim();
+  if (dom.isNotEmpty) {
+    m['도메인/워크그룹'] = (dom.toUpperCase() == comp.toUpperCase()) ? '작업그룹 PC (도메인 아님)' : '도메인: $dom';
+  }
+  try {
+    final ifs = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
+    final ips = <String>[];
+    for (final i in ifs) { for (final a in i.addresses) { ips.add(a.address); } }
+    if (ips.isNotEmpty) m['내부 IP'] = ips.join(', ');
+  } catch (_) {}
+  try {
+    final r = await http.get(Uri.parse('https://405.kr/luxauth/api/ip')).timeout(const Duration(seconds: 8));
+    if (r.statusCode == 200) {
+      final j = jsonDecode(r.body);
+      if (j is Map && j['ip'] != null) m['외부 IP'] = j['ip'].toString();
+    }
+  } catch (_) {}
+  try { m['Windows'] = Platform.operatingSystemVersion; } catch (_) {}
+  final arch = (env['PROCESSOR_ARCHITECTURE'] ?? '').toUpperCase();
+  final arch6432 = (env['PROCESSOR_ARCHITEW6432'] ?? '').toUpperCase();
+  m['비트'] = (arch.contains('64') || arch6432.contains('64')) ? '64비트' : (arch.isEmpty ? '확인 불가' : '32비트');
+  final cpu = (env['PROCESSOR_IDENTIFIER'] ?? '').trim();
+  if (cpu.isNotEmpty) m['CPU'] = cpu;
+  final cores = (env['NUMBER_OF_PROCESSORS'] ?? '').trim();
+  if (cores.isNotEmpty) m['논리 코어'] = '$cores개';
+  return m;
+}
+
+void _showLuxSysInfo(BuildContext context) {
+  gFFI.dialogManager.show((setDlg, close, ctx) => CustomAlertDialog(
+        title: const Text('이 PC 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const SizedBox(width: double.maxFinite, child: _LuxSysInfo()),
+        actions: [dialogButton('닫기', onPressed: close)],
+        onSubmit: close,
+        onCancel: close,
+      ));
+}
+
+class _LuxSysInfo extends StatefulWidget {
+  const _LuxSysInfo();
+  @override
+  State<_LuxSysInfo> createState() => _LuxSysInfoState();
+}
+
+class _LuxSysInfoState extends State<_LuxSysInfo> {
+  Map<String, String>? _info;
+  @override
+  void initState() {
+    super.initState();
+    _gatherSysInfo().then((m) { if (mounted) setState(() => _info = m); });
+  }
+  @override
+  Widget build(BuildContext context) {
+    final info = _info;
+    if (info == null) {
+      return const SizedBox(height: 90, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+    final keys = _kSysInfoKeys.where((k) => (info[k] ?? '').isNotEmpty).toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...keys.map((k) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(width: 92, child: Text(k, style: const TextStyle(fontSize: 12.5, color: Colors.grey))),
+                Expanded(child: SelectableText(info[k]!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+              ]),
+            )),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('전체 복사'),
+            onPressed: () {
+              final t = keys.map((k) => '$k: ${info[k]}').join('\n');
+              Clipboard.setData(ClipboardData(text: t));
+              showToast(translate('Copied'));
+            },
+          ),
+        ),
+      ],
     );
   }
 }
