@@ -12,6 +12,9 @@
 //   RustDesk Server Pro 가 정답. — CLAUDE.md 보안 경계 참조.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ffi' hide Size; // dart:ffi 의 Size 숨김(Flutter Size 충돌 방지)
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -35,6 +38,31 @@ const Color _kAccent = Color(0xFF4F46E5);
 
 String _getTok() { try { return bind.mainGetLocalOption(key: _kTokKey); } catch (_) { return ''; } }
 Future<void> _setTok(String v) async { try { await bind.mainSetLocalOption(key: _kTokKey, value: v); } catch (_) {} }
+
+// 응답의 채널을 로컬에 저장(기사 홈에서 '내 채널' 표시용)
+void _saveChannel(dynamic m) {
+  try { if (m is Map && m['channel'] != null) bind.mainSetLocalOption(key: 'luxcom-channel', value: m['channel'].toString()); } catch (_) {}
+}
+
+// PC UUID(MachineGuid) — 콘솔창 없이 레지스트리에서 읽음(Windows). 동시접속 기기 식별용.
+typedef _RegGetN = Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32, Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>);
+typedef _RegGetD = int Function(int, Pointer<Utf16>, Pointer<Utf16>, int, Pointer<Uint32>, Pointer<Void>, Pointer<Uint32>);
+String luxMachineUuid() {
+  if (!Platform.isWindows) return '';
+  try {
+    final regGet = DynamicLibrary.open('advapi32.dll').lookupFunction<_RegGetN, _RegGetD>('RegGetValueW');
+    final sk = r'SOFTWARE\Microsoft\Cryptography'.toNativeUtf16();
+    final v = 'MachineGuid'.toNativeUtf16();
+    const cap = 256;
+    final buf = calloc<Uint16>(cap);
+    final sz = calloc<Uint32>()..value = cap * 2;
+    try {
+      final r = regGet(0x80000002, sk, v, 0x0000ffff, nullptr, buf.cast<Void>(), sz);
+      if (r == 0) return buf.cast<Utf16>().toDartString().trim();
+    } finally { calloc.free(sk); calloc.free(v); calloc.free(buf); calloc.free(sz); }
+  } catch (_) {}
+  return '';
+}
 
 /// 메인 창을 감싸는 게이트.
 class LuxComGate extends StatefulWidget {
@@ -72,12 +100,13 @@ class _LuxComGateState extends State<LuxComGate> {
       final r = await http
           .post(Uri.parse('$kLuxAuthUrl/api/resume'),
               headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'session': tok}))
+              body: jsonEncode({'session': tok, 'uuid': luxMachineUuid()}))
           .timeout(const Duration(seconds: 10));
       if (r.statusCode == 200) {
         try {
           final m = jsonDecode(r.body);
           if (m is Map && m['heartbeat'] is int) _hbSec = m['heartbeat'] as int;
+          _saveChannel(m);
         } catch (_) {}
         _onAuthed(tok);
         return;
@@ -167,7 +196,7 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
       final r = await http
           .post(Uri.parse('$kLuxAuthUrl/api/login'),
               headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'username': u, 'password': p}))
+              body: jsonEncode({'username': u, 'password': p, 'uuid': luxMachineUuid()}))
           .timeout(const Duration(seconds: 12));
       if (r.statusCode == 200) {
         String tok = '';
@@ -177,6 +206,7 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
           if (m is Map) {
             tok = (m['session'] ?? '').toString();
             if (m['heartbeat'] is int) hb = m['heartbeat'] as int;
+            _saveChannel(m);
           }
         } catch (_) {}
         if (mounted) widget.onSuccess(tok, hb);

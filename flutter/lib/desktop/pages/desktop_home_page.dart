@@ -246,6 +246,29 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4)),
               ),
             ),
+            // [LUXCOM] 내 채널 표시(로그인 응답에서 저장한 값)
+            Padding(
+              padding: const EdgeInsets.only(left: 22, top: 12),
+              child: Builder(builder: (_) {
+                String ch = '';
+                try { ch = bind.mainGetLocalOption(key: 'luxcom-channel'); } catch (_) {}
+                return Text(ch.isEmpty ? '내 채널: (미지정)' : '내 채널: $ch',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary));
+              }),
+            ),
+            // [LUXCOM] 윈도우 공유/NAS/프린터 문제 해결 메뉴
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 10),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.build_circle_outlined, size: 14),
+                label: const Text('윈도우 공유문제 해결', style: TextStyle(fontSize: 12)),
+                onPressed: () => _showLuxWinFix(context),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4)),
+              ),
+            ),
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsets.only(left: 22, right: 16),
@@ -261,6 +284,48 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // [LUXCOM] 윈도우 11 24H2/25H2 공유/NAS/프린터 문제 해결 — 적용/원상복구(관리자 권한)
+  Future<void> _showLuxWinFix(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF181A30),
+        title: const Text('윈도우 공유 · NAS · 프린터 문제 해결',
+            style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 470,
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: const [
+              Text('윈도우 11 24H2/25H2 업데이트 후 공유폴더·NAS·프린터 연결이 끊기는 문제를 한 번에 고칩니다. 누르면 관리자 권한(UAC) 창이 뜨니 "예"를 눌러주세요.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFFCDD2F0), height: 1.6)),
+              SizedBox(height: 12),
+              _LuxFixItem('🔓 SMB 게스트 접근 허용',
+                  'NAS·공유폴더에 "게스트(비밀번호 없이)"로 접속하던 게 24H2부터 막혔습니다. 다시 허용합니다. (보안이 조금 낮아져 회사·집 내부망에서만 권장)'),
+              _LuxFixItem('✍ SMB 서명 강제 해제',
+                  '24H2가 통신에 "서명"을 강제해 구형 NAS·공유장비 연결이 안 되는 경우를 풉니다.'),
+              _LuxFixItem('🔎 네트워크 검색 + 공유 켜기',
+                  '"네트워크 검색"·"파일/프린터 공유" 방화벽을 켜고 관련 서비스를 자동 시작합니다. 다른 PC·NAS가 네트워크에 보이게 됩니다.'),
+              _LuxFixItem('🖨 프린터 공유 오류 수정',
+                  '공유 프린터 연결 시 나는 "0x0000011b" 오류를 해결합니다.'),
+              SizedBox(height: 10),
+              Text('⚠ 적용 내용은 아래 "원래대로 복구"로 되돌릴 수 있습니다. 적용 후 PC를 재부팅하면 확실합니다.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFFFFB366), height: 1.5)),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () { Navigator.pop(ctx); _luxRunWinFix(false).then((m) => showToast(m)); },
+              child: const Text('원래대로 복구', style: TextStyle(color: Color(0xFF9AA0C8)))),
+          TextButton(
+              onPressed: () { Navigator.pop(ctx); _luxRunWinFix(true).then((m) => showToast(m)); },
+              style: TextButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+              child: const Text('공유 문제 해결 적용', style: TextStyle(color: Colors.white))),
+        ],
       ),
     );
   }
@@ -1573,8 +1638,8 @@ const List<String> _kSysInfoKeys = ['PC 이름', '도메인/워크그룹', '내�
 
 // [LUXCOM] 버전 라벨 — RustDesk 베이스(1.4.6) + 우리 빌드 번호(4번째 자리). 패치마다 kLuxComBuild++.
 const String kLuxRustDeskVer = '1.4.6';
-const int kLuxComBuild = 2;
-const String kLuxVerLabel = 'v$kLuxRustDeskVer.$kLuxComBuild'; // = v1.4.6.2
+const int kLuxComBuild = 3;
+const String kLuxVerLabel = 'v$kLuxRustDeskVer.$kLuxComBuild'; // = v1.4.6.3
 
 // [LUXCOM] 버전 표시(2줄) — 소비자 패널 하단 + 기사 패널 하단 공용.
 class _LuxVersionFooter extends StatelessWidget {
@@ -1722,6 +1787,76 @@ void _showLuxSysInfo(BuildContext context) {
         onCancel: close,
       )).then((_) { if (inc) { try { windowManager.setSize(getIncomingOnlyHomeSize()); } catch (_) {} } });
 }
+
+// [LUXCOM] 공유문제 해결 다이얼로그의 항목 설명 위젯
+class _LuxFixItem extends StatelessWidget {
+  final String title;
+  final String desc;
+  const _LuxFixItem(this.title, this.desc);
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.bold, color: Color(0xFF86E08A))),
+          Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(desc, style: const TextStyle(fontSize: 11.8, color: Color(0xFF9AA0C8), height: 1.5))),
+        ]),
+      );
+}
+
+// 공유문제 해결: 스크립트를 임시폴더에 쓰고 관리자 권한(UAC)으로 실행. apply=적용+복구스크립트 생성 / false=복구.
+Future<String> _luxRunWinFix(bool apply) async {
+  if (!Platform.isWindows) return '윈도우에서만 지원합니다.';
+  try {
+    final tmp = Platform.environment['TEMP'] ?? Platform.environment['TMP'] ?? r'C:\Windows\Temp';
+    final f = File('$tmp\\luxcom_winfix_${apply ? 'apply' : 'restore'}.ps1');
+    await f.writeAsString(apply ? _kLuxFixApplyPs : _kLuxFixRestorePs, flush: true);
+    await Process.start('powershell', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command',
+      "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','${f.path}'"
+    ]);
+    return apply
+        ? 'UAC 창에서 "예"를 누르면 적용됩니다. 완료 후 재부팅을 권장합니다.'
+        : 'UAC 창에서 "예"를 누르면 원래대로 복구됩니다.';
+  } catch (e) {
+    return '실행 실패: $e';
+  }
+}
+
+// 적용: 현재 레지스트리 값을 캡처해 복구 스크립트(ProgramData\LuxCom\winfix_restore.ps1) 생성 후 수정 적용.
+const String _kLuxFixApplyPs = r'''
+$ErrorActionPreference='SilentlyContinue'
+$dir="$env:ProgramData\LuxCom"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+$pr='HKLM:\SYSTEM\CurrentControlSet\Control\Print'
+New-Item -Path $ws -Force | Out-Null
+$R=@("`$ErrorActionPreference='SilentlyContinue'")
+function Bak($p,$n){ $cur=(Get-ItemProperty -Path $p -Name $n -EA 0).$n; if($null -eq $cur){ "Remove-ItemProperty -Path '$p' -Name '$n' -EA 0" } else { "New-ItemProperty -Path '$p' -Name '$n' -Value $cur -PropertyType DWord -Force | Out-Null" } }
+$R+=Bak $ws 'AllowInsecureGuestAuth'
+$R+=Bak $ws 'RequireSecuritySignature'
+$R+=Bak $ws 'EnableSecuritySignature'
+$R+=Bak $pr 'RpcAuthnLevelPrivacyEnabled'
+$R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0"
+$R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0"
+$R+="Restart-Service LanmanWorkstation -Force -EA 0"
+$R | Set-Content "$dir\winfix_restore.ps1" -Encoding UTF8
+New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $ws -Name 'RequireSecuritySignature' -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $ws -Name 'EnableSecuritySignature' -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $pr -Name 'RpcAuthnLevelPrivacyEnabled' -Value 0 -PropertyType DWord -Force | Out-Null
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
+foreach($s in 'FDResPub','fdPHost','SSDPSRV','upnphost','LanmanServer','LanmanWorkstation'){ Set-Service $s -StartupType Automatic -EA 0; Start-Service $s -EA 0 }
+Restart-Service LanmanWorkstation -Force -EA 0
+''';
+
+// 복구: 적용 때 생성된 복구 스크립트를 실행(없으면 무동작).
+const String _kLuxFixRestorePs = r'''
+$ErrorActionPreference='SilentlyContinue'
+$f="$env:ProgramData\LuxCom\winfix_restore.ps1"
+if(Test-Path $f){ & $f }
+''';
 
 class _LuxSysInfo extends StatefulWidget {
   const _LuxSysInfo();
