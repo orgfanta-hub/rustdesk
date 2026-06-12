@@ -1432,14 +1432,17 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
         await bind.mainSetOption(key: 'luxcom-standby-name', value: name);
         await bind.mainSetOption(key: 'luxcom-standby', value: 'Y');
         if (mounted) setState(() {});
-        // 서비스로 설치 → 재부팅에도 항상 자동 시작. (Windows 권한창 1회)
-        await bind.installInstallMe(
-            options: 'desktopicon startmenu', path: bind.installInstallPath());
-        // [LUXCOM] 스탠바이=트레이 백그라운드 에이전트 → 창 숨김(작업표시줄에서 사라짐).
-        //   트레이 아이콘은 설치 상태에서 RustDesk 가 자동 실행. 다시 열기=트레이 또는 아이콘 재실행.
+        // [LUXCOM] 스탠바이 켜는 즉시 트레이로 — 창을 먼저 숨긴다(작업표시줄에서 사라짐).
+        //   기존엔 설치(installInstallMe)를 먼저 하느라 그 과정/설치본 재시작 동안 창이
+        //   잠깐 보이거나 떠 있어서 "꺼졌다 다시 켜야" 처럼 느껴졌다. 숨김을 앞으로 옮겨
+        //   체감 끊김을 없앤다. 설치본이 새로 떠도 main.dart 가 luxcom-standby='Y' 를
+        //   보고 숨김 상태로 시작한다.
         try {
           await windowManager.hide();
         } catch (_) {}
+        // 서비스로 설치 → 재부팅에도 항상 자동 시작. (Windows 권한창 1회)
+        await bind.installInstallMe(
+            options: 'desktopicon startmenu', path: bind.installInstallPath());
       }
 
       return CustomAlertDialog(
