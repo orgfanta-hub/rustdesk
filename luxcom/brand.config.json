@@ -39,7 +39,7 @@
 
   "update": {
     "urlBase": "https://405.kr/u",
-    "releaseVersion": "1.4.6",
+    "releaseVersion": "1.4.7",
     "_note": "RustDesk 내장 자동업데이트(updater.rs)를 405.kr 로 연동. 점검 URL api.rustdesk.com/version/latest → {urlBase}/{profile}/latest 로 변경(GET, 정적 JSON {\"url\":\"{urlBase}/{profile}/tag/{ver}\"}). releaseVersion = 이 빌드 버전(Cargo.toml 에 주입 = crate::VERSION). 릴리스마다 올림(1.4.6→1.4.7…; get_version_number 로 비교, 더 크면 업데이트). 설치파일 = {urlBase}/{profile}/download/{ver}/rustdesk-{ver}-x86_64.exe. 강제게이트(version.json minSerial)와 별개 = 평소엔 자동업뎃, 게이트는 백업/강제. 서버부하 0(Caddy 정적). 새 릴리스 절차: releaseVersion 올림→빌드→exe 호스팅→테스트→latest JSON 을 새 버전으로 변경(이때 전 클라가 자동 업데이트)."
   },
 
