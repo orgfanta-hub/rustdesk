@@ -782,7 +782,9 @@ $f="$env:ProgramData\LuxCom\winfix_restore.ps1"
 if(Test-Path $f){ & $f }
 "#;
 
-// PC 정보 보기 — 관리자 권한 불필요. 컴퓨터/OS/CPU/RAM/디스크/IP 를 메시지박스로(고객 화면 → 원격 기사가 봄).
+// [LUXCOM] 모든 작업은 '보이는' powershell 창에서 실행하고, 끝에 Read-Host 로 멈춰
+//   결과/정보를 기사가 원격 화면으로 확인한 뒤 Enter(또는 창 닫기)로 직접 닫게 한다.
+//   (기존엔 -WindowStyle Hidden + MessageBox 라 창이 바로 꺼져 확인 불가였음)
 const LUX_INFO: &str = r#"$ErrorActionPreference='SilentlyContinue'
 $cs=Get-CimInstance Win32_ComputerSystem
 $os=Get-CimInstance Win32_OperatingSystem
@@ -791,21 +793,33 @@ $ram=[math]::Round($cs.TotalPhysicalMemory/1GB,1)
 $ip=(Get-NetIPAddress -AddressFamily IPv4 -EA 0 | Where-Object {$_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254*'} | Select-Object -First 1).IPAddress
 $d=Get-CimInstance Win32_LogicalDisk -EA 0 | Where-Object {$_.DeviceID -eq 'C:'}
 $free=[math]::Round($d.FreeSpace/1GB,0); $tot=[math]::Round($d.Size/1GB,0)
-$m="● 컴퓨터: $($cs.Name)`n● OS: $($os.Caption)`n● CPU: $cpu`n● 메모리: ${ram} GB`n● C드라이브: ${free}/${tot} GB 여유`n● IP: $ip"
-Add-Type -AssemblyName System.Windows.Forms
-[void][System.Windows.Forms.MessageBox]::Show($m,'PC 정보 - LuxCom 원격관리')
+Write-Host ''
+Write-Host '========== PC 정보 (LuxCom 원격관리) ==========' -ForegroundColor Cyan
+Write-Host ('  컴퓨터    : ' + $cs.Name)
+Write-Host ('  OS        : ' + $os.Caption)
+Write-Host ('  CPU       : ' + $cpu)
+Write-Host ('  메모리    : ' + $ram + ' GB')
+Write-Host ('  C 드라이브: ' + $free + ' / ' + $tot + ' GB 여유')
+Write-Host ('  IP 주소   : ' + $ip)
+Write-Host '===============================================' -ForegroundColor Cyan
+Write-Host ''
+Read-Host '확인하셨으면 Enter 를 누르세요 (이 창이 닫힙니다)'
 "#;
 const LUX_PRINTER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
 Set-Service -Name Spooler -StartupType Automatic -EA 0; Start-Service -Name Spooler -EA 0
 Get-Printer -EA 0 | Where-Object { -not $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $true -EA 0 }
-Add-Type -AssemblyName System.Windows.Forms
-[void][System.Windows.Forms.MessageBox]::Show('프린터 공유를 켰습니다.','완료 - LuxCom 원격관리')
+Write-Host ''
+Write-Host '  [완료] 프린터 공유를 켰습니다.' -ForegroundColor Green
+Write-Host ''
+Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
 "#;
 const LUX_PRINTER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
 Get-Printer -EA 0 | Where-Object { $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $false -EA 0 }
-Add-Type -AssemblyName System.Windows.Forms
-[void][System.Windows.Forms.MessageBox]::Show('프린터 공유를 껐습니다.','완료 - LuxCom 원격관리')
+Write-Host ''
+Write-Host '  [완료] 프린터 공유를 껐습니다.' -ForegroundColor Yellow
+Write-Host ''
+Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
 "#;
 const LUX_FOLDER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
@@ -813,14 +827,18 @@ Set-Service -Name LanmanServer -StartupType Automatic -EA 0; Start-Service -Name
 $ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
 New-Item -Path $ws -Force | Out-Null
 New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
-Add-Type -AssemblyName System.Windows.Forms
-[void][System.Windows.Forms.MessageBox]::Show('공유폴더(파일 공유)를 켰습니다.','완료 - LuxCom 원격관리')
+Write-Host ''
+Write-Host '  [완료] 공유폴더(파일 공유)를 켰습니다.' -ForegroundColor Green
+Write-Host ''
+Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
 "#;
 const LUX_FOLDER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
 Stop-Service -Name LanmanServer -Force -EA 0
 Set-Service -Name LanmanServer -StartupType Disabled -EA 0
-Add-Type -AssemblyName System.Windows.Forms
-[void][System.Windows.Forms.MessageBox]::Show('공유폴더(파일 공유)를 껐습니다.','완료 - LuxCom 원격관리')
+Write-Host ''
+Write-Host '  [완료] 공유폴더(파일 공유)를 껐습니다.' -ForegroundColor Yellow
+Write-Host ''
+Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
 "#;
 
 pub fn lux_run_winfix(text: &str) {
@@ -846,9 +864,10 @@ pub fn lux_run_winfix(text: &str) {
     }
     let file = path.to_string_lossy().to_string();
     if elevate {
-        // 관리자 권한(UAC 자기상승) — 고객 화면에 UAC 가 뜨고 원격 제어 중인 기사가 '예' 클릭.
+        // 바깥 powershell(숨김)이 관리자 권한으로 안쪽 powershell(보이는 창)을 띄운다.
+        //   UAC 는 고객 화면에 뜨고, 작업 후 창이 결과를 표시한 채 Enter 대기 → 기사가 확인·닫음.
         let inner = format!(
-            "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}'",
+            "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','{}'",
             file.replace('\'', "''")
         );
         let _ = std::process::Command::new("powershell")
@@ -863,14 +882,12 @@ pub fn lux_run_winfix(text: &str) {
             ])
             .spawn();
     } else {
-        // 관리자 불필요(PC 정보 등) → 바로 실행(UAC 없음).
+        // 관리자 불필요(PC 정보) → 보이는 창에서 바로 실행, 결과 표시 후 Enter 대기.
         let _ = std::process::Command::new("powershell")
             .args(&[
                 "-NoProfile",
                 "-ExecutionPolicy",
                 "Bypass",
-                "-WindowStyle",
-                "Hidden",
                 "-File",
                 &file,
             ])
