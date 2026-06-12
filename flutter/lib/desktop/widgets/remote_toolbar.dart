@@ -480,19 +480,52 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
 class _LuxFixMenu extends StatelessWidget {
   final FFI ffi;
   const _LuxFixMenu({Key? key, required this.ffi}) : super(key: key);
+
+  void _send(String cmd) {
+    bind.sessionSendChat(sessionId: ffi.sessionId, text: cmd);
+    showToast('고객 PC에서 작업을 실행합니다.\n관리자(UAC) 창이 뜨면 화면에서 "예"를 눌러주세요.');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _IconMenuButton(
-      icon: const Icon(Icons.build, size: 22, color: Colors.white),
+    // 기존 드롭다운 메뉴(_ControlMenu 등)와 같은 _IconSubmenuButton 사용 → 크기/모양 자동 일치.
+    return _IconSubmenuButton(
       tooltip: '공유 고치기 (Fix)',
+      icon: SizedBox(
+        width: _ToolbarTheme.buttonSize,
+        height: _ToolbarTheme.buttonSize,
+        child: Center(
+          child: Icon(Icons.build,
+              size: _ToolbarTheme.buttonSize * 0.62, color: Colors.white),
+        ),
+      ),
       color: _ToolbarTheme.blueColor,
       hoverColor: _ToolbarTheme.hoverBlueColor,
-      onPressed: () {
-        bind.sessionSendChat(
-            sessionId: ffi.sessionId, text: '##LUXFIX:apply##');
-        showToast(
-            '고객 PC에 "공유 고치기"를 적용합니다.\n고객 화면에 권한(UAC) 창이 뜨면 "예"를 눌러주세요.');
-      },
+      ffi: ffi,
+      menuChildrenGetter: (_) => [
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _send('##LUXFIX:info##'),
+            child: Text('PC 정보 보기')),
+        const Divider(),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _send('##LUXFIX:printer-on##'),
+            child: Text('프린터 공유 켜기')),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _send('##LUXFIX:printer-off##'),
+            child: Text('프린터 공유 끄기')),
+        const Divider(),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _send('##LUXFIX:folder-on##'),
+            child: Text('공유폴더 켜기')),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _send('##LUXFIX:folder-off##'),
+            child: Text('공유폴더 끄기')),
+      ],
     );
   }
 }

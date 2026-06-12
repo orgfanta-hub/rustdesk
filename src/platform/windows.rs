@@ -782,34 +782,100 @@ $f="$env:ProgramData\LuxCom\winfix_restore.ps1"
 if(Test-Path $f){ & $f }
 "#;
 
+// PC 정보 보기 — 관리자 권한 불필요. 컴퓨터/OS/CPU/RAM/디스크/IP 를 메시지박스로(고객 화면 → 원격 기사가 봄).
+const LUX_INFO: &str = r#"$ErrorActionPreference='SilentlyContinue'
+$cs=Get-CimInstance Win32_ComputerSystem
+$os=Get-CimInstance Win32_OperatingSystem
+$cpu=(Get-CimInstance Win32_Processor | Select-Object -First 1).Name
+$ram=[math]::Round($cs.TotalPhysicalMemory/1GB,1)
+$ip=(Get-NetIPAddress -AddressFamily IPv4 -EA 0 | Where-Object {$_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254*'} | Select-Object -First 1).IPAddress
+$d=Get-CimInstance Win32_LogicalDisk -EA 0 | Where-Object {$_.DeviceID -eq 'C:'}
+$free=[math]::Round($d.FreeSpace/1GB,0); $tot=[math]::Round($d.Size/1GB,0)
+$m="● 컴퓨터: $($cs.Name)`n● OS: $($os.Caption)`n● CPU: $cpu`n● 메모리: ${ram} GB`n● C드라이브: ${free}/${tot} GB 여유`n● IP: $ip"
+Add-Type -AssemblyName System.Windows.Forms
+[void][System.Windows.Forms.MessageBox]::Show($m,'PC 정보 - LuxCom 원격관리')
+"#;
+const LUX_PRINTER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
+Set-Service -Name Spooler -StartupType Automatic -EA 0; Start-Service -Name Spooler -EA 0
+Get-Printer -EA 0 | Where-Object { -not $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $true -EA 0 }
+Add-Type -AssemblyName System.Windows.Forms
+[void][System.Windows.Forms.MessageBox]::Show('프린터 공유를 켰습니다.','완료 - LuxCom 원격관리')
+"#;
+const LUX_PRINTER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
+Get-Printer -EA 0 | Where-Object { $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $false -EA 0 }
+Add-Type -AssemblyName System.Windows.Forms
+[void][System.Windows.Forms.MessageBox]::Show('프린터 공유를 껐습니다.','완료 - LuxCom 원격관리')
+"#;
+const LUX_FOLDER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
+Set-Service -Name LanmanServer -StartupType Automatic -EA 0; Start-Service -Name LanmanServer -EA 0
+$ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+New-Item -Path $ws -Force | Out-Null
+New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
+Add-Type -AssemblyName System.Windows.Forms
+[void][System.Windows.Forms.MessageBox]::Show('공유폴더(파일 공유)를 켰습니다.','완료 - LuxCom 원격관리')
+"#;
+const LUX_FOLDER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
+Stop-Service -Name LanmanServer -Force -EA 0
+Set-Service -Name LanmanServer -StartupType Disabled -EA 0
+Add-Type -AssemblyName System.Windows.Forms
+[void][System.Windows.Forms.MessageBox]::Show('공유폴더(파일 공유)를 껐습니다.','완료 - LuxCom 원격관리')
+"#;
+
 pub fn lux_run_winfix(text: &str) {
-    let restore = text.contains("restore");
-    let script = if restore { LUX_WINFIX_RESTORE } else { LUX_WINFIX_APPLY };
-    let fname = if restore {
-        "luxcom_winfix_restore.ps1"
+    // 명령 분기: info(관리자X) / printer-on·off / folder-on·off (관리자 필요) / 기존 apply·restore.
+    let (script, elevate): (&str, bool) = if text.contains("info") {
+        (LUX_INFO, false)
+    } else if text.contains("printer-on") {
+        (LUX_PRINTER_ON, true)
+    } else if text.contains("printer-off") {
+        (LUX_PRINTER_OFF, true)
+    } else if text.contains("folder-on") {
+        (LUX_FOLDER_ON, true)
+    } else if text.contains("folder-off") {
+        (LUX_FOLDER_OFF, true)
+    } else if text.contains("restore") {
+        (LUX_WINFIX_RESTORE, true)
     } else {
-        "luxcom_winfix_apply.ps1"
+        (LUX_WINFIX_APPLY, true)
     };
-    let path = std::env::temp_dir().join(fname);
+    let path = std::env::temp_dir().join("luxcom_winfix.ps1");
     if std::fs::write(&path, script).is_err() {
         return;
     }
-    let p = path.to_string_lossy().replace('\'', "''");
-    let inner = format!(
-        "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}'",
-        p
-    );
-    let _ = std::process::Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            &inner,
-        ])
-        .spawn();
+    let file = path.to_string_lossy().to_string();
+    if elevate {
+        // 관리자 권한(UAC 자기상승) — 고객 화면에 UAC 가 뜨고 원격 제어 중인 기사가 '예' 클릭.
+        let inner = format!(
+            "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}'",
+            file.replace('\'', "''")
+        );
+        let _ = std::process::Command::new("powershell")
+            .args(&[
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                &inner,
+            ])
+            .spawn();
+    } else {
+        // 관리자 불필요(PC 정보 등) → 바로 실행(UAC 없음).
+        let _ = std::process::Command::new("powershell")
+            .args(&[
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-File",
+                &file,
+            ])
+            .spawn();
+    }
 }
 
 pub fn run_as_user(arg: Vec<&str>) -> ResultType<Option<std::process::Child>> {
