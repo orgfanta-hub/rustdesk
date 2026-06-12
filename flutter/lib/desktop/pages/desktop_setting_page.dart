@@ -412,7 +412,7 @@ class _GeneralState extends State<_General> {
     return ListView(
       controller: scrollController,
       children: [
-        if (!isWeb) service(),
+        // [LuxCom] 서비스(시작/중지) 카드 제거 — 일반 사용자에게 의미 없는 기능
         theme(),
         _Card(title: 'Language', children: [language()]),
         if (!isWeb) hwcodec(),

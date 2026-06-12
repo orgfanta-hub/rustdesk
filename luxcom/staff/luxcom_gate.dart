@@ -127,6 +127,35 @@ class _LuxComGateState extends State<LuxComGate> {
     if (mounted) setState(() => _authed = false);
   }
 
+  // 로그오프: 로컬 세션 토큰 삭제 + 서버에 알림(있으면) → 로그인 화면
+  Future<void> _logout() async {
+    final tok = _getTok();
+    _hb?.cancel();
+    await _setTok('');
+    if (tok.isNotEmpty) {
+      try {
+        await http.post(Uri.parse('$kLuxAuthUrl/api/logout'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'session': tok})).timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _authed = false);
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('로그아웃 / Log out'),
+        content: const Text('로그아웃하시겠어요? 다시 사용하려면 로그인해야 합니다.\nLog out? You will need to sign in again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소 / Cancel')),
+          FilledButton(onPressed: () { Navigator.pop(c); _logout(); }, child: const Text('로그아웃 / Log out')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -135,7 +164,36 @@ class _LuxComGateState extends State<LuxComGate> {
         body: Center(child: CircularProgressIndicator(strokeWidth: 2.4, color: _kAccent)),
       );
     }
-    if (_authed) return widget.child;
+    if (_authed) {
+      // 인증 후 메인 화면 + 우하단 떠있는 로그아웃 버튼
+      return Stack(children: [
+        widget.child,
+        Positioned(
+          right: 12,
+          bottom: 12,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: _confirmLogout,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _kAccent,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2))],
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.logout, size: 14, color: Colors.white),
+                  SizedBox(width: 5),
+                  Text('로그아웃', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    }
     return _LuxComLoginPage(onSuccess: (tok, hb) { _hbSec = hb; _onAuthed(tok); });
   }
 }
