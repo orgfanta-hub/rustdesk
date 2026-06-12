@@ -661,6 +661,86 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
     }
   }
 
+  // [LUXCOM] 기사가 고객 스탠바이(상주) 모드를 원격 해제 — 기사 로그인 비밀번호 재확인 필수
+  void _confirmStandbyOff(String id, String name) {
+    final pwCtrl = TextEditingController();
+    String err = '';
+    bool busy = false;
+    gFFI.dialogManager.show((setDlg, close, context) {
+      doOff() async {
+        if (busy) return;
+        setDlg(() { busy = true; err = ''; });
+        try {
+          final r = await http
+              .post(Uri.parse('$_luxAuthBase/api/standby-off'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode({
+                    'session': _token(),
+                    'channel': _channel,
+                    'id': id,
+                    'password': pwCtrl.text
+                  }))
+              .timeout(const Duration(seconds: 10));
+          dynamic m;
+          try { m = jsonDecode(r.body); } catch (_) { m = {}; }
+          if (r.statusCode == 200 && m is Map && m['ok'] == true) {
+            close();
+            showToast('해제 명령을 보냈습니다 — 잠시 후(최대 5초) 고객 PC에서 상주가 해제됩니다.');
+          } else {
+            setDlg(() {
+              busy = false;
+              err = (m is Map && m['message'] != null)
+                  ? m['message'].toString()
+                  : '해제에 실패했습니다 (${r.statusCode}).';
+            });
+          }
+        } catch (_) {
+          setDlg(() { busy = false; err = '서버에 연결할 수 없습니다.'; });
+        }
+      }
+
+      return CustomAlertDialog(
+        title: const Text('스탠바이(상주) 원격 해제',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  '${name.isEmpty ? "번호 $id" : name} 의 상주(무인 접속) 모드를 원격으로 해제합니다.\n해제하려면 본인(기사) 로그인 비밀번호를 입력하세요.',
+                  style: const TextStyle(fontSize: 12.5, height: 1.5)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pwCtrl,
+                obscureText: true,
+                autofocus: true,
+                style: const TextStyle(fontSize: 14),
+                decoration: const InputDecoration(
+                    hintText: '기사 로그인 비밀번호',
+                    border: OutlineInputBorder(),
+                    isDense: true),
+                onSubmitted: (_) => doOff(),
+              ),
+              if (err.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(err,
+                      style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          dialogButton('취소', onPressed: close, isOutline: true),
+          dialogButton(busy ? '처리 중…' : '해제', onPressed: busy ? null : doOff),
+        ],
+        onCancel: close,
+      );
+    });
+  }
+
   Future<void> _poll() async {
     final tok = _token();
     if (tok.isEmpty) {
@@ -840,9 +920,42 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
                                 color: _accent)),
+                        if (((c['ip'] ?? '').toString().isNotEmpty) ||
+                            ((c['lan_ip'] ?? '').toString().isNotEmpty))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                                '외부 ${(c['ip'] ?? '').toString().isEmpty ? '-' : c['ip']}   ·   내부 ${(c['lan_ip'] ?? '').toString().isEmpty ? '-' : c['lan_ip']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: theme.hintColor,
+                                    fontWeight: FontWeight.w500)),
+                          ),
                       ],
                     ),
                   ),
+                  if (standby) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: '스탠바이(상주) 모드 원격 해제',
+                      child: OutlinedButton(
+                        onPressed: () => _confirmStandbyOff(id, name),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFB45309),
+                          side: const BorderSide(color: Color(0xFFF59E0B)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 11, vertical: 9),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(9)),
+                        ),
+                        child: const Text('상주 끄기',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 12)),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () => widget.onPick(id),

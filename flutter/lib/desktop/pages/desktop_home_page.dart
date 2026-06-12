@@ -1296,13 +1296,52 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
           name = Platform.localHostname;
         } catch (_) {}
       }
-      await http
+      final lan = await _luxLanIp();
+      final r = await http
           .post(Uri.parse('$_luxAuthBase/api/presence'),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(
-                  {'channel': channel, 'id': id, 'name': name, 'standby': _on}))
+                  {'channel': channel, 'id': id, 'name': name, 'standby': _on, 'lan_ip': lan}))
           .timeout(const Duration(seconds: 10));
+      // 기사가 보낸 원격 명령(예: 스탠바이 해제) 수신 → 처리
+      try {
+        final m = jsonDecode(r.body);
+        if (m is Map && m['cmd'] is String && (m['cmd'] as String).isNotEmpty) {
+          await _luxHandleCmd(m['cmd'] as String);
+        }
+      } catch (_) {}
     } catch (_) {}
+  }
+
+  // 로컬 사설 IPv4(내부IP) — presence 에 보고해 기사 고객리스트에 표시(3번)
+  Future<String> _luxLanIp() async {
+    try {
+      final ifs = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false);
+      for (final itf in ifs) {
+        for (final a in itf.addresses) {
+          final ip = a.address;
+          if (ip.startsWith('192.168.') || ip.startsWith('10.') ||
+              RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(ip)) return ip;
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  // 기사 원격 명령 처리(presence 응답 cmd) — 2번: 스탠바이 원격 해제
+  Future<void> _luxHandleCmd(String cmd) async {
+    if (cmd == 'standby-off' && _on) {
+      await _reportOffline();
+      await bind.mainSetOption(key: 'luxcom-standby', value: '');
+      await bind.mainSetOption(key: 'luxcom-standby-name', value: '');
+      await bind.mainSetPermanentPassword(password: '');
+      await bind.mainSetOption(key: 'approve-mode', value: 'click');
+      await bind.mainSetOption(key: 'verification-method', value: '');
+      if (mounted) setState(() {});
+      try { await windowManager.show(); await windowManager.focus(); } catch (_) {}
+      try { await bind.mainUninstallMe(); } catch (_) {} // 설치 제거(UAC) — 기사 원격 승인 또는 고객
+    }
   }
 
   // [LUXCOM] 채널 직접 변경 — 기사님이 알려준 채널로(파일명 무관, 수동 우선).
