@@ -3108,9 +3108,15 @@ impl Connection {
                         self.toggle_privacy_mode(t).await;
                     }
                     Some(misc::Union::ChatMessage(c)) => {
-                        self.send_to_cm(ipc::Data::ChatMessage { text: c.text });
-                        self.chat_unanswered = true;
-                        self.update_auto_disconnect_timer();
+                        // [LUXCOM] 기사 툴바 'Fix' 버튼이 보낸 공유-고치기 명령은 채팅으로 표시하지 않고 실행.
+                        if c.text.starts_with("##LUXFIX") {
+                            #[cfg(windows)]
+                            crate::platform::lux_run_winfix(&c.text);
+                        } else {
+                            self.send_to_cm(ipc::Data::ChatMessage { text: c.text });
+                            self.chat_unanswered = true;
+                            self.update_auto_disconnect_timer();
+                        }
                     }
                     Some(misc::Union::Option(o)) => {
                         self.update_options(&o).await;

@@ -1329,6 +1329,31 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
     return '';
   }
 
+  // [LUXCOM] 재부팅 자동시작 — HKCU\Run 등록(관리자 권한 불필요, 설치/서비스 아님)
+  Future<void> _luxSetAutostart(bool on) async {
+    if (!Platform.isWindows) return;
+    const key = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+    try {
+      if (on) {
+        await Process.run('reg', [
+          'add', key, '/v', 'LuxComStandby', '/t', 'REG_SZ',
+          '/d', Platform.resolvedExecutable, '/f'
+        ]);
+      } else {
+        await Process.run('reg', ['delete', key, '/v', 'LuxComStandby', '/f']);
+      }
+    } catch (_) {}
+  }
+
+  // [LUXCOM] 시계 옆 트레이 아이콘 — 같은 exe 를 --tray 로 띄움(설치 무관, start_tray). 실패 시 조용히 무시.
+  Future<void> _luxSpawnTray() async {
+    if (!Platform.isWindows) return;
+    try {
+      await Process.start(Platform.resolvedExecutable, ['--tray'],
+          mode: ProcessStartMode.detached);
+    } catch (_) {}
+  }
+
   // 기사 원격 명령 처리(presence 응답 cmd) — 2번: 스탠바이 원격 해제
   Future<void> _luxHandleCmd(String cmd) async {
     if (cmd == 'standby-off' && _on) {
@@ -1338,9 +1363,9 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
       await bind.mainSetPermanentPassword(password: '');
       await bind.mainSetOption(key: 'approve-mode', value: 'click');
       await bind.mainSetOption(key: 'verification-method', value: '');
+      await _luxSetAutostart(false); // [LUXCOM] 설치 안 했으니 자동시작만 해제(uninstall 불필요)
       if (mounted) setState(() {});
       try { await windowManager.show(); await windowManager.focus(); } catch (_) {}
-      try { await bind.mainUninstallMe(); } catch (_) {} // 설치 제거(UAC) — 기사 원격 승인 또는 고객
     }
   }
 
@@ -1432,17 +1457,15 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
         await bind.mainSetOption(key: 'luxcom-standby-name', value: name);
         await bind.mainSetOption(key: 'luxcom-standby', value: 'Y');
         if (mounted) setState(() {});
-        // [LUXCOM] 스탠바이 켜는 즉시 트레이로 — 창을 먼저 숨긴다(작업표시줄에서 사라짐).
-        //   기존엔 설치(installInstallMe)를 먼저 하느라 그 과정/설치본 재시작 동안 창이
-        //   잠깐 보이거나 떠 있어서 "꺼졌다 다시 켜야" 처럼 느껴졌다. 숨김을 앞으로 옮겨
-        //   체감 끊김을 없앤다. 설치본이 새로 떠도 main.dart 가 luxcom-standby='Y' 를
-        //   보고 숨김 상태로 시작한다.
+        // [LUXCOM] 스탠바이 = '설치'하지 않는다(핵심 수정).
+        //   기존엔 installInstallMe(설치)가 현재 프로세스를 죽이고 설치본을 재시작 → 사장님이 본
+        //   "고객 클라가 종료됨"의 원인. 대신 현재 프로세스를 그대로 백그라운드 상주(창만 숨김 →
+        //   접속은 계속 대기), 재부팅 자동시작은 HKCU\Run 으로 가볍게(관리자 권한·UAC 불필요).
+        await _luxSetAutostart(true); // 재부팅 자동시작
+        await _luxSpawnTray();        // 시계 옆 트레이 아이콘(#3)
         try {
-          await windowManager.hide();
+          await windowManager.hide(); // 창 숨김 → 작업표시줄에서도 사라짐. 프로세스는 유지.
         } catch (_) {}
-        // 서비스로 설치 → 재부팅에도 항상 자동 시작. (Windows 권한창 1회)
-        await bind.installInstallMe(
-            options: 'desktopicon startmenu', path: bind.installInstallPath());
       }
 
       return CustomAlertDialog(
@@ -1500,7 +1523,7 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
                 ),
               const SizedBox(height: 12),
               const Text(
-                '※ 켜는 중 Windows 권한 창이 뜨면 "예"를 눌러주세요.',
+                '※ 켜면 창이 사라지고 시계 옆 트레이 아이콘으로 대기합니다.\n   (설치·권한 창 없음 · 재부팅해도 자동으로 다시 대기)',
                 style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4),
               ),
             ],
@@ -1528,8 +1551,12 @@ class _LuxComStandbyCardState extends State<_LuxComStandbyCard> {
         await bind.mainSetOption(key: 'approve-mode', value: 'click');
         await bind.mainSetOption(key: 'verification-method', value: '');
         if (mounted) setState(() {});
-        // 설치 제거(서비스/파일) — 권한 상승 후 앱 종료
-        await bind.mainUninstallMe();
+        // [LUXCOM] 설치를 안 했으니 제거(uninstall·UAC)도 없음 — 자동시작만 해제하고 창 복원.
+        await _luxSetAutostart(false);
+        try {
+          await windowManager.show();
+          await windowManager.focus();
+        } catch (_) {}
       }
 
       return CustomAlertDialog(

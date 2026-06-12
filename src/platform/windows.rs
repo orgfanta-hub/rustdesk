@@ -749,6 +749,69 @@ pub fn launch_privileged_process(session_id: DWORD, cmd: &str) -> ResultType<HAN
     Ok(h)
 }
 
+// [LUXCOM] 기사 원격 툴바 'Fix' 버튼 → 고객 PC 윈도우 공유문제 자동 해결.
+//   관리자 권한이 필요(HKLM·방화벽)하므로 powershell 자기 권한상승(Start-Process -Verb RunAs)을 쓴다.
+//   UAC 창은 고객 PC 화면에 뜨고, 원격 제어 중인 기사가 화면에서 '예'를 눌러 진행한다.
+//   text 예: "##LUXFIX:apply##"(적용) / "##LUXFIX:restore##"(원복).
+const LUX_WINFIX_APPLY: &str = r#"$ErrorActionPreference='SilentlyContinue'
+$dir="$env:ProgramData\LuxCom"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+$pr='HKLM:\SYSTEM\CurrentControlSet\Control\Print'
+New-Item -Path $ws -Force | Out-Null
+$R=@("`$ErrorActionPreference='SilentlyContinue'")
+function Bak($p,$n){ $cur=(Get-ItemProperty -Path $p -Name $n -EA 0).$n; if($null -eq $cur){ "Remove-ItemProperty -Path '$p' -Name '$n' -EA 0" } else { "New-ItemProperty -Path '$p' -Name '$n' -Value $cur -PropertyType DWord -Force | Out-Null" } }
+$R+=Bak $ws 'AllowInsecureGuestAuth'
+$R+=Bak $ws 'RequireSecuritySignature'
+$R+=Bak $ws 'EnableSecuritySignature'
+$R+=Bak $pr 'RpcAuthnLevelPrivacyEnabled'
+$R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0"
+$R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0"
+$R+="Restart-Service LanmanWorkstation -Force -EA 0"
+$R | Set-Content "$dir\winfix_restore.ps1" -Encoding UTF8
+New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $ws -Name 'RequireSecuritySignature' -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $ws -Name 'EnableSecuritySignature' -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $pr -Name 'RpcAuthnLevelPrivacyEnabled' -Value 0 -PropertyType DWord -Force | Out-Null
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
+foreach($s in 'FDResPub','fdPHost','SSDPSRV','upnphost','LanmanServer','LanmanWorkstation'){ Set-Service $s -StartupType Automatic -EA 0; Start-Service $s -EA 0 }
+Restart-Service LanmanWorkstation -Force -EA 0
+"#;
+const LUX_WINFIX_RESTORE: &str = r#"$ErrorActionPreference='SilentlyContinue'
+$f="$env:ProgramData\LuxCom\winfix_restore.ps1"
+if(Test-Path $f){ & $f }
+"#;
+
+pub fn lux_run_winfix(text: &str) {
+    let restore = text.contains("restore");
+    let script = if restore { LUX_WINFIX_RESTORE } else { LUX_WINFIX_APPLY };
+    let fname = if restore {
+        "luxcom_winfix_restore.ps1"
+    } else {
+        "luxcom_winfix_apply.ps1"
+    };
+    let path = std::env::temp_dir().join(fname);
+    if std::fs::write(&path, script).is_err() {
+        return;
+    }
+    let p = path.to_string_lossy().replace('\'', "''");
+    let inner = format!(
+        "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','{}'",
+        p
+    );
+    let _ = std::process::Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &inner,
+        ])
+        .spawn();
+}
+
 pub fn run_as_user(arg: Vec<&str>) -> ResultType<Option<std::process::Child>> {
     run_exe_in_cur_session(std::env::current_exe()?.to_str().unwrap_or(""), arg, false)
 }

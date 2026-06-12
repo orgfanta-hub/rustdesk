@@ -404,6 +404,10 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       toolbarItems.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
     }
     if (!isWeb) toolbarItems.add(_RecordMenu());
+    // [LUXCOM] 원격 중 고객 PC '공유 고치기(Fix)' — 윈도우 파일/프린터 공유 문제 자동 해결
+    if (!isWeb && widget.ffi.connType == ConnType.defaultConn) {
+      toolbarItems.add(_LuxFixMenu(ffi: widget.ffi));
+    }
     toolbarItems.add(_CloseMenu(id: widget.id, ffi: widget.ffi));
     final toolbarBorderRadius = BorderRadius.all(Radius.circular(4.0));
     return Column(
@@ -465,6 +469,30 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       ).copyWith(
               backgroundColor:
                   Theme.of(context).menuBarTheme.style?.backgroundColor)),
+    );
+  }
+}
+
+// [LUXCOM] 기사 원격 툴바의 '공유 고치기(Fix)' 버튼.
+//   누르면 고객 PC 로 "##LUXFIX:apply##" 명령(채팅 메시지에 실어 전송)을 보낸다.
+//   고객 클라가 이를 가로채 윈도우 공유 설정을 자동 수정한다(관리자 권한 → 고객 화면에 UAC,
+//   원격 제어 중인 기사가 직접 '예' 클릭). protobuf 무수정(기존 ChatMessage 재활용)이라 빌드 안전.
+class _LuxFixMenu extends StatelessWidget {
+  final FFI ffi;
+  const _LuxFixMenu({Key? key, required this.ffi}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return _IconMenuButton(
+      icon: const Icon(Icons.build, size: 22, color: Colors.white),
+      tooltip: '공유 고치기 (Fix)',
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      onPressed: () {
+        bind.sessionSendChat(
+            sessionId: ffi.sessionId, text: '##LUXFIX:apply##');
+        showToast(
+            '고객 PC에 "공유 고치기"를 적용합니다.\n고객 화면에 권한(UAC) 창이 뜨면 "예"를 눌러주세요.');
+      },
     );
   }
 }

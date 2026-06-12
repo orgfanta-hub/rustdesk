@@ -677,8 +677,7 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
                   body: jsonEncode({
                     'session': _token(),
                     'channel': _channel,
-                    'id': id,
-                    'password': pwCtrl.text
+                    'id': id
                   }))
               .timeout(const Duration(seconds: 10));
           dynamic m;
@@ -709,20 +708,8 @@ class _LuxComStandbyListState extends State<_LuxComStandbyList> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                  '${name.isEmpty ? "번호 $id" : name} 의 상주(무인 접속) 모드를 원격으로 해제합니다.\n해제하려면 본인(기사) 로그인 비밀번호를 입력하세요.',
+                  '${name.isEmpty ? "번호 $id" : name} 의 상주(무인 접속) 모드를 원격으로 해제합니다.\n로그인된 기사 본인 확인으로 바로 해제됩니다.',
                   style: const TextStyle(fontSize: 12.5, height: 1.5)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pwCtrl,
-                obscureText: true,
-                autofocus: true,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                    hintText: '기사 로그인 비밀번호',
-                    border: OutlineInputBorder(),
-                    isDense: true),
-                onSubmitted: (_) => doOff(),
-              ),
               if (err.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
