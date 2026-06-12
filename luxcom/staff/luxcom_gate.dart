@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'models/platform_model.dart'; // bind.mainGetLocalOption / mainSetLocalOption
 
@@ -271,7 +272,26 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBg,
-      body: Center(
+      body: Stack(children: [
+        // 상단 드래그 영역(타이틀바 숨김이라 창 이동용)
+        Positioned(
+          top: 0, left: 0, right: 0, height: 46,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanStart: (_) { try { windowManager.startDragging(); } catch (_) {} },
+            child: const SizedBox.expand(),
+          ),
+        ),
+        // 우상단 최소화 / 종료 버튼
+        Positioned(
+          top: 8, right: 10,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _winBtn(Icons.remove, () { try { windowManager.minimize(); } catch (_) {} }),
+            const SizedBox(width: 4),
+            _winBtn(Icons.close, () { try { windowManager.close(); } catch (_) {} }, danger: true),
+          ]),
+        ),
+        Center(
         child: SingleChildScrollView(
           child: Container(
             width: 372,
@@ -349,6 +369,23 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
             ),
           ),
         ),
+      ),
+      ]),
+    );
+  }
+
+  Widget _winBtn(IconData ic, VoidCallback onTap, {bool danger = false}) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: danger ? const Color(0xFFE53935) : Colors.white24,
+        onTap: onTap,
+        child: SizedBox(
+            width: 36,
+            height: 30,
+            child: Center(child: Icon(ic, size: 17, color: _kSub))),
       ),
     );
   }

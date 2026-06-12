@@ -115,6 +115,18 @@ patch(
   `$1${prof.productName}$2`
 );
 
+// ── [동시실행] 포터블 추출 폴더 분리 ───────────────────────────────
+// 포터블 단일 exe 는 실행 시 %LOCALAPPDATA%\{APP_PREFIX} 에 자가 추출한다.
+// 기본값 "rustdesk" 고정이면 consumer/staff 가 같은 폴더를 공유 → 한쪽이 실행 중일 때
+// 다른 쪽을 켜면 추출 충돌(timestamp 불일치 시 remove_dir_all + 파일 잠금)로
+// 동시 실행이 막힌다. 프로필별 폴더로 분리해 동시 실행을 허용한다.
+patch(
+  path.join('libs', 'portable', 'src', 'main.rs'),
+  '포터블 추출 폴더 분리(동시실행)',
+  /(const APP_PREFIX: &str = ")[^"]*(";)/,
+  `$1luxcom-${profileName}$2`
+);
+
 // ── [브랜딩] EXE 파일 속성 ─────────────────────────────────────────
 const RC = path.join('flutter', 'windows', 'runner', 'Runner.rc');
 patch(RC, 'EXE 속성 ProductName',     /(VALUE "ProductName",\s*")[^"]*(")/,     `$1${prof.productName}$2`);
