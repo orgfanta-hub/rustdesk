@@ -120,7 +120,19 @@ fn start_auto_update_check_(rx_msg: Receiver<UpdateMsg>) {
 fn check_update(manually: bool) -> ResultType<()> {
     #[cfg(target_os = "windows")]
     let update_msi = crate::platform::is_msi_installed()? && !crate::is_custom_client();
-    if !(manually || config::Config::get_bool_option(config::keys::OPTION_ALLOW_AUTO_UPDATE)) {
+    // [LUXCOM] 설치된 화이트라벨(405.kr) 클라이언트는 자동 업데이트를 항상 활성화.
+    //   RustDesk 기본은 OPTION_ALLOW_AUTO_UPDATE 옵션이 켜져야만 자동 업데이트하지만,
+    //   기사용(설치형)은 옵션과 무관하게 새 버전을 스스로 받아 교체하도록 한다.
+    //   고객용(포터블·미설치)은 is_installed()=false 이므로 여기서 통과하지 않아
+    //   불필요한 다운로드가 발생하지 않는다(이후 update_me 도 미설치면 동작 안 함).
+    #[cfg(target_os = "windows")]
+    let lux_auto = crate::is_custom_client() && crate::platform::is_installed();
+    #[cfg(not(target_os = "windows"))]
+    let lux_auto = false;
+    if !(manually
+        || lux_auto
+        || config::Config::get_bool_option(config::keys::OPTION_ALLOW_AUTO_UPDATE))
+    {
         return Ok(());
     }
     if do_check_software_update().is_err() {
