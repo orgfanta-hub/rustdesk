@@ -785,81 +785,114 @@ if(Test-Path $f){ & $f }
 // [LUXCOM] 모든 작업은 '보이는' powershell 창에서 실행하고, 끝에 Read-Host 로 멈춰
 //   결과/정보를 기사가 원격 화면으로 확인한 뒤 Enter(또는 창 닫기)로 직접 닫게 한다.
 //   (기존엔 -WindowStyle Hidden + MessageBox 라 창이 바로 꺼져 확인 불가였음)
-const LUX_INFO: &str = r#"$ErrorActionPreference='SilentlyContinue'
+// 공용 헤더: ① 한글 깨짐 방지(chcp 65001 + UTF-8 콘솔) ② 친절한 출력 헬퍼(제목/단계/완료/현황/대기)
+const LUX_HDR: &str = r#"chcp 65001 > $null
+[Console]::OutputEncoding=[System.Text.Encoding]::UTF8
+$ErrorActionPreference='SilentlyContinue'
+function Title($t){Write-Host '';Write-Host ('='*52) -ForegroundColor Cyan;Write-Host ('   '+$t) -ForegroundColor Cyan;Write-Host ('='*52) -ForegroundColor Cyan;Write-Host ''}
+function Step($n,$t,$m){Write-Host ('   [{0}/{1}] {2}' -f $n,$t,$m) -ForegroundColor White -NoNewline}
+function OK($m){Write-Host ('   ->  '+$m) -ForegroundColor Green}
+function Skip($m){Write-Host ('   ->  '+$m) -ForegroundColor Yellow}
+function Stat($k,$v,$ok){Write-Host ('   - '+$k+' : ') -ForegroundColor Gray -NoNewline;Write-Host $v -ForegroundColor $(if($ok){'Green'}else{'Yellow'})}
+function Pause(){Write-Host '';Write-Host ('-'*52) -ForegroundColor DarkGray;Read-Host '   확인하셨으면 Enter 키를 누르세요 (창이 닫힙니다)'}
+"#;
+const LUX_INFO_BODY: &str = r#"Title 'PC 정보 조회 (LuxCom 원격관리)'
+Write-Host '   정보를 수집하는 중입니다...' -ForegroundColor DarkGray
 $cs=Get-CimInstance Win32_ComputerSystem
 $os=Get-CimInstance Win32_OperatingSystem
-$cpu=(Get-CimInstance Win32_Processor | Select-Object -First 1).Name
+$cpu=(Get-CimInstance Win32_Processor|Select-Object -First 1).Name
 $ram=[math]::Round($cs.TotalPhysicalMemory/1GB,1)
-$ip=(Get-NetIPAddress -AddressFamily IPv4 -EA 0 | Where-Object {$_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254*'} | Select-Object -First 1).IPAddress
-$d=Get-CimInstance Win32_LogicalDisk -EA 0 | Where-Object {$_.DeviceID -eq 'C:'}
-$free=[math]::Round($d.FreeSpace/1GB,0); $tot=[math]::Round($d.Size/1GB,0)
+$ip=(Get-NetIPAddress -AddressFamily IPv4 -EA 0|Where-Object {$_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254*'}|Select-Object -First 1).IPAddress
+$d=Get-CimInstance Win32_LogicalDisk -EA 0|Where-Object {$_.DeviceID -eq 'C:'}
+$free=[math]::Round($d.FreeSpace/1GB,0);$tot=[math]::Round($d.Size/1GB,0)
 Write-Host ''
-Write-Host '========== PC 정보 (LuxCom 원격관리) ==========' -ForegroundColor Cyan
-Write-Host ('  컴퓨터    : ' + $cs.Name)
-Write-Host ('  OS        : ' + $os.Caption)
-Write-Host ('  CPU       : ' + $cpu)
-Write-Host ('  메모리    : ' + $ram + ' GB')
-Write-Host ('  C 드라이브: ' + $free + ' / ' + $tot + ' GB 여유')
-Write-Host ('  IP 주소   : ' + $ip)
-Write-Host '===============================================' -ForegroundColor Cyan
-Write-Host ''
-Read-Host '확인하셨으면 Enter 를 누르세요 (이 창이 닫힙니다)'
+Stat '컴퓨터 이름' $cs.Name $true
+Stat '운영체제' $os.Caption $true
+Stat 'CPU' $cpu $true
+Stat '메모리' ($ram.ToString()+' GB') $true
+Stat 'C 드라이브' ($free.ToString()+' GB 여유 / 총 '+$tot+' GB') ($free -gt 20)
+Stat 'IP 주소' $ip $true
+Write-Host '';Write-Host '   상태: 정상적으로 조회했습니다.' -ForegroundColor Green
+Pause
 "#;
-const LUX_PRINTER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
-Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
-Set-Service -Name Spooler -StartupType Automatic -EA 0; Start-Service -Name Spooler -EA 0
-Get-Printer -EA 0 | Where-Object { -not $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $true -EA 0 }
-Write-Host ''
-Write-Host '  [완료] 프린터 공유를 켰습니다.' -ForegroundColor Green
-Write-Host ''
-Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
+const LUX_PRINTER_ON_BODY: &str = r#"Title '프린터 공유 켜기'
+Step 1 3 '방화벽에서 프린터 공유를 허용합니다'
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0;OK '허용함'
+Step 2 3 '인쇄 스풀러 서비스를 시작합니다'
+Set-Service -Name Spooler -StartupType Automatic -EA 0;Start-Service -Name Spooler -EA 0
+$sp=((Get-Service Spooler -EA 0).Status -eq 'Running');if($sp){OK '실행 중'}else{Skip '확인 필요'}
+Step 3 3 '설치된 프린터를 공유로 전환합니다'
+$n=0;Get-Printer -EA 0|Where-Object{-not $_.Shared}|ForEach-Object{Set-Printer -Name $_.Name -Shared $true -EA 0;$n++};OK ($n.ToString()+'대 전환')
+Write-Host '';Write-Host '   [ 적용 현황 ]' -ForegroundColor Cyan
+Stat '방화벽 공유 허용' '완료' $true
+Stat '인쇄 스풀러' $(if($sp){'실행 중'}else{'확인 필요'}) $sp
+Stat '공유 전환 프린터' ($n.ToString()+'대') $true
+Write-Host '';Write-Host '   프린터 공유를 켰습니다.' -ForegroundColor Green
+Pause
 "#;
-const LUX_PRINTER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
-Get-Printer -EA 0 | Where-Object { $_.Shared } | ForEach-Object { Set-Printer -Name $_.Name -Shared $false -EA 0 }
-Write-Host ''
-Write-Host '  [완료] 프린터 공유를 껐습니다.' -ForegroundColor Yellow
-Write-Host ''
-Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
+const LUX_PRINTER_OFF_BODY: &str = r#"Title '프린터 공유 끄기'
+Step 1 1 '공유 중인 프린터를 해제합니다'
+$n=0;Get-Printer -EA 0|Where-Object{$_.Shared}|ForEach-Object{Set-Printer -Name $_.Name -Shared $false -EA 0;$n++};OK ($n.ToString()+'대 해제')
+Write-Host '';Write-Host '   [ 적용 현황 ]' -ForegroundColor Cyan
+Stat '공유 해제 프린터' ($n.ToString()+'대') $true
+Write-Host '';Write-Host '   프린터 공유를 껐습니다.' -ForegroundColor Yellow
+Pause
 "#;
-const LUX_FOLDER_ON: &str = r#"$ErrorActionPreference='SilentlyContinue'
-Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
-Set-Service -Name LanmanServer -StartupType Automatic -EA 0; Start-Service -Name LanmanServer -EA 0
+const LUX_FOLDER_ON_BODY: &str = r#"Title '공유폴더(파일 공유) 켜기'
+Step 1 3 '방화벽에서 파일·프린터 공유를 허용합니다'
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0;OK '허용함'
+Step 2 3 '서버(파일 공유) 서비스를 시작합니다'
+Set-Service -Name LanmanServer -StartupType Automatic -EA 0;Start-Service -Name LanmanServer -EA 0
+$sv=((Get-Service LanmanServer -EA 0).Status -eq 'Running');if($sv){OK '실행 중'}else{Skip '확인 필요'}
+Step 3 3 '게스트 접근(이름·암호 없이 공유 보기)을 허용합니다'
 $ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
-New-Item -Path $ws -Force | Out-Null
-New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
-Write-Host ''
-Write-Host '  [완료] 공유폴더(파일 공유)를 켰습니다.' -ForegroundColor Green
-Write-Host ''
-Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
+New-Item -Path $ws -Force|Out-Null;New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force|Out-Null;OK '허용함'
+Write-Host '';Write-Host '   [ 적용 현황 ]' -ForegroundColor Cyan
+Stat '방화벽 공유 허용' '완료' $true
+Stat '파일 공유 서비스' $(if($sv){'실행 중'}else{'확인 필요'}) $sv
+Stat '게스트 접근' '허용' $true
+Write-Host '';Write-Host '   공유폴더(파일 공유)를 켰습니다.' -ForegroundColor Green
+Pause
 "#;
-const LUX_FOLDER_OFF: &str = r#"$ErrorActionPreference='SilentlyContinue'
-Stop-Service -Name LanmanServer -Force -EA 0
+const LUX_FOLDER_OFF_BODY: &str = r#"Title '공유폴더(파일 공유) 끄기'
+Step 1 2 '서버(파일 공유) 서비스를 중지합니다'
+Stop-Service -Name LanmanServer -Force -EA 0;OK '중지함'
+Step 2 2 '서비스를 사용 안 함으로 설정합니다'
 Set-Service -Name LanmanServer -StartupType Disabled -EA 0
-Write-Host ''
-Write-Host '  [완료] 공유폴더(파일 공유)를 껐습니다.' -ForegroundColor Yellow
-Write-Host ''
-Read-Host '확인 후 Enter 를 누르세요 (이 창이 닫힙니다)'
+$sv=((Get-Service LanmanServer -EA 0).Status -eq 'Running');if(-not $sv){OK '중지됨'}else{Skip '확인 필요'}
+Write-Host '';Write-Host '   [ 적용 현황 ]' -ForegroundColor Cyan
+Stat '파일 공유 서비스' $(if($sv){'아직 실행 중'}else{'중지됨'}) (-not $sv)
+Write-Host '';Write-Host '   공유폴더(파일 공유)를 껐습니다.' -ForegroundColor Yellow
+Pause
 "#;
 
 pub fn lux_run_winfix(text: &str) {
     // 명령 분기: info(관리자X) / printer-on·off / folder-on·off (관리자 필요) / 기존 apply·restore.
-    let (script, elevate): (&str, bool) = if text.contains("info") {
-        (LUX_INFO, false)
+    let (body, elevate, hdr): (&str, bool, bool) = if text.contains("info") {
+        (LUX_INFO_BODY, false, true)
     } else if text.contains("printer-on") {
-        (LUX_PRINTER_ON, true)
+        (LUX_PRINTER_ON_BODY, true, true)
     } else if text.contains("printer-off") {
-        (LUX_PRINTER_OFF, true)
+        (LUX_PRINTER_OFF_BODY, true, true)
     } else if text.contains("folder-on") {
-        (LUX_FOLDER_ON, true)
+        (LUX_FOLDER_ON_BODY, true, true)
     } else if text.contains("folder-off") {
-        (LUX_FOLDER_OFF, true)
+        (LUX_FOLDER_OFF_BODY, true, true)
     } else if text.contains("restore") {
-        (LUX_WINFIX_RESTORE, true)
+        (LUX_WINFIX_RESTORE, true, false)
     } else {
-        (LUX_WINFIX_APPLY, true)
+        (LUX_WINFIX_APPLY, true, false)
     };
+    let script = if hdr {
+        format!("{}{}", LUX_HDR, body)
+    } else {
+        body.to_string()
+    };
+    // Windows PowerShell 5.1 은 BOM 없는 .ps1 을 시스템 ANSI(CP949)로 읽어 한글이 깨진다 → UTF-8 BOM 부착.
+    let mut data = String::from("\u{feff}");
+    data.push_str(&script);
     let path = std::env::temp_dir().join("luxcom_winfix.ps1");
-    if std::fs::write(&path, script).is_err() {
+    if std::fs::write(&path, data).is_err() {
         return;
     }
     let file = path.to_string_lossy().to_string();
