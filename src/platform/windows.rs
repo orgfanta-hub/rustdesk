@@ -1026,7 +1026,7 @@ unsafe extern "system" fn lux_blind_wndproc(
 
 unsafe fn lux_blind_loop() {
     use std::sync::atomic::Ordering;
-    let hinst = GetModuleHandleW(std::ptr::null());
+    let hinst = winapi::um::libloaderapi::GetModuleHandleW(std::ptr::null());
     let class_name: Vec<u16> = "LuxBlindCover\0".encode_utf16().collect();
     let mut wc: WNDCLASSEXW = std::mem::zeroed();
     wc.cbSize = std::mem::size_of::<WNDCLASSEXW>() as u32;
