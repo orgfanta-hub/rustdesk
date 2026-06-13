@@ -838,20 +838,43 @@ Stat '공유 해제 프린터' ($n.ToString()+'대') $true
 Write-Host '';Write-Host '   프린터 공유를 껐습니다.' -ForegroundColor Yellow
 Pause
 "#;
-const LUX_FOLDER_ON_BODY: &str = r#"Title '공유폴더(파일 공유) 켜기'
-Step 1 3 '방화벽에서 파일·프린터 공유를 허용합니다'
+const LUX_FOLDER_ON_BODY: &str = r#"Title '공유폴더(파일 공유) 켜기 + SMB 진단'
+function Note($m){Write-Host ('       안내) '+$m) -ForegroundColor DarkGray}
+function Warn($m){Write-Host ('       주의) '+$m) -ForegroundColor DarkYellow}
+Step 1 5 '네트워크를 개인(Private)으로 전환합니다'
+Get-NetConnectionProfile -EA 0|Where-Object{$_.NetworkCategory -eq 'Public'}|ForEach-Object{Set-NetConnectionProfile -InterfaceIndex $_.InterfaceIndex -NetworkCategory Private -EA 0}
+$cat=(Get-NetConnectionProfile -EA 0|Select-Object -First 1).NetworkCategory;if(-not $cat){$cat='알 수 없음'}
+if($cat -ne 'Public'){OK ([string]$cat)}else{Skip '공용 유지(전환 실패)'}
+Step 2 5 '방화벽: 파일·프린터 공유를 허용합니다'
 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0;OK '허용함'
-Step 2 3 '서버(파일 공유) 서비스를 시작합니다'
+Step 3 5 '방화벽: 네트워크 검색을 허용합니다'
+Enable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0;OK '허용함'
+Step 4 5 '파일 공유 서비스(Server)를 시작합니다'
 Set-Service -Name LanmanServer -StartupType Automatic -EA 0;Start-Service -Name LanmanServer -EA 0
 $sv=((Get-Service LanmanServer -EA 0).Status -eq 'Running');if($sv){OK '실행 중'}else{Skip '확인 필요'}
-Step 3 3 '게스트 접근(이름·암호 없이 공유 보기)을 허용합니다'
+Step 5 5 '게스트 접근(이름·암호 없이 공유 보기)을 허용합니다'
+Set-SmbClientConfiguration -EnableInsecureGuestLogons $true -Force -EA 0
 $ws='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
 New-Item -Path $ws -Force|Out-Null;New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force|Out-Null;OK '허용함'
-Write-Host '';Write-Host '   [ 적용 현황 ]' -ForegroundColor Cyan
-Stat '방화벽 공유 허용' '완료' $true
-Stat '파일 공유 서비스' $(if($sv){'실행 중'}else{'확인 필요'}) $sv
-Stat '게스트 접근' '허용' $true
-Write-Host '';Write-Host '   공유폴더(파일 공유)를 켰습니다.' -ForegroundColor Green
+Write-Host '';Write-Host '   [ SMB 보안 상태 진단 ]' -ForegroundColor Cyan
+$s=Get-SmbServerConfiguration -EA 0;$c=Get-SmbClientConfiguration -EA 0
+Stat '네트워크 위치' ([string]$cat) ($cat -ne 'Public')
+if($cat -eq 'Public'){Warn '공용 네트워크에선 공유가 차단됩니다. 개인으로 바꿔야 합니다.'}
+$smb1=[bool]$s.EnableSMB1Protocol
+Stat 'SMB1(구형 장비용)' $(if($smb1){'사용'}else{'사용 안 함(기본)'}) (-not $smb1)
+Note '아주 오래된 NAS·복합기에 연결할 때만 필요. 평소엔 꺼두는 게 안전합니다.'
+$sign=[bool]$s.RequireSecuritySignature
+Stat 'SMB 서명 요구' $(if($sign){'예(엄격)'}else{'아니오'}) (-not $sign)
+if($sign){Warn '서명을 강제하면 일부 구형 기기·NAS가 접속 못 할 수 있습니다.'}
+$enc=([bool]$s.EncryptData -or [bool]$s.RejectUnencryptedAccess)
+Stat 'SMB 암호화 요구' $(if($enc){'예'}else{'아니오'}) (-not $enc)
+if($enc){Warn '암호화를 강제하면 암호화 미지원 기기는 접속이 거부됩니다.'}
+$guest=[bool]$c.EnableInsecureGuestLogons
+Stat '게스트(비암호) 접근' $(if($guest){'허용'}else{'차단'}) $guest
+Note '매장 내부망 공유 편의로 허용했습니다(외부 노출 환경에선 권장하지 않음).'
+Write-Host '';Write-Host '   공유폴더 기본 설정을 적용했습니다.' -ForegroundColor Green
+Write-Host '   * 위 진단에 [주의] 항목이 있으면, 그 설정이 공유를 막고 있을 수 있습니다.' -ForegroundColor Gray
+Write-Host '   * 폴더 자체는 [폴더 우클릭 > 속성 > 공유] 에서 대상(Everyone)을 추가하세요.' -ForegroundColor Gray
 Pause
 "#;
 const LUX_FOLDER_OFF_BODY: &str = r#"Title '공유폴더(파일 공유) 끄기'
