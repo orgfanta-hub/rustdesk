@@ -486,6 +486,19 @@ class _LuxFixMenu extends StatelessWidget {
     showToast('고객 PC에서 작업을 실행합니다.\n관리자(UAC) 창이 뜨면 화면에서 "예"를 눌러주세요.');
   }
 
+  // 블라인드(화면 가리기): RustDesk privacy mode 의 exclude_from_capture 임플을 직접 토글.
+  // → 고객 화면은 가려지고(검은화면) 기사 캡처에는 그대로 보임 + 고객 입력 차단 + 접속종료 자동해제.
+  // 기본 UI 는 pi.features.privacyMode 게이트로 숨겨져 있어, 여기서 게이트 없이 직접 호출한다(Win10 2004+ 필요).
+  void _blind(bool on) {
+    bind.sessionTogglePrivacyMode(
+        sessionId: ffi.sessionId,
+        implKey: 'privacy_mode_impl_exclude_from_capture',
+        on: on);
+    showToast(on
+        ? '화면 가리기(블라인드)를 켭니다. 고객 화면은 가려지고 기사 화면엔 그대로 보입니다.\n(지원되지 않는 PC면 적용되지 않을 수 있습니다)'
+        : '화면 가리기(블라인드)를 끕니다.');
+  }
+
   @override
   Widget build(BuildContext context) {
     // 기존 드롭다운 메뉴(_ControlMenu 등)와 같은 _IconSubmenuButton 사용 → 크기/모양 자동 일치.
@@ -525,6 +538,15 @@ class _LuxFixMenu extends StatelessWidget {
             ffi: ffi,
             onPressed: () => _send('##LUXFIX:folder-off##'),
             child: Text('공유폴더 끄기')),
+        const Divider(),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _blind(true),
+            child: Text('화면 가리기(블라인드) 켜기')),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _blind(false),
+            child: Text('화면 가리기(블라인드) 끄기')),
       ],
     );
   }
