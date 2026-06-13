@@ -495,8 +495,27 @@ class _LuxFixMenu extends StatelessWidget {
         implKey: 'privacy_mode_impl_exclude_from_capture',
         on: on);
     showToast(on
-        ? '화면 가리기(블라인드)를 켭니다. 고객 화면은 가려지고 기사 화면엔 그대로 보입니다.\n(지원되지 않는 PC면 적용되지 않을 수 있습니다)'
-        : '화면 가리기(블라인드)를 끕니다.');
+        ? '화면 가리기(검정)를 켭니다. 고객 화면은 가려지고 기사 화면엔 그대로 보입니다.\n(지원되지 않는 PC면 적용되지 않을 수 있습니다)'
+        : '화면 가리기(검정)를 끕니다.');
+  }
+
+  // 점검중 안내 커버(자체 오버레이, 캡처 제외). 검정 대신 "점검 중입니다" 안내 화면.
+  void _overlay(bool on) {
+    bind.sessionSendChat(
+        sessionId: ffi.sessionId, text: on ? '##LUXBLIND:on' : '##LUXBLIND:off');
+    showToast(on
+        ? '고객 화면에 "점검 중입니다" 안내를 표시합니다. 기사 화면엔 실제 화면이 보입니다.'
+        : '안내 화면을 끕니다.');
+  }
+
+  // 화면 가리기 모두 해제(검정 privacy + 점검중 오버레이 둘 다).
+  void _blindAllOff() {
+    bind.sessionTogglePrivacyMode(
+        sessionId: ffi.sessionId,
+        implKey: 'privacy_mode_impl_exclude_from_capture',
+        on: false);
+    bind.sessionSendChat(sessionId: ffi.sessionId, text: '##LUXBLIND:off');
+    showToast('화면 가리기를 모두 해제합니다.');
   }
 
   @override
@@ -542,11 +561,15 @@ class _LuxFixMenu extends StatelessWidget {
         MenuButton(
             ffi: ffi,
             onPressed: () => _blind(true),
-            child: Text('화면 가리기(블라인드) 켜기')),
+            child: Text('화면 가리기 — 검정')),
         MenuButton(
             ffi: ffi,
-            onPressed: () => _blind(false),
-            child: Text('화면 가리기(블라인드) 끄기')),
+            onPressed: () => _overlay(true),
+            child: Text('화면 가리기 — 점검중 안내')),
+        MenuButton(
+            ffi: ffi,
+            onPressed: () => _blindAllOff(),
+            child: Text('화면 가리기 모두 끄기')),
       ],
     );
   }

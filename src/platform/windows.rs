@@ -951,6 +951,147 @@ pub fn lux_run_winfix(text: &str) {
     }
 }
 
+// ── 블라인드 커버 오버레이 (프리셋 "점검 중입니다") ──
+// RustDesk privacy window 는 프리빌드 WindowInjection.dll 이 그리는 검정 전용이라 커스텀 표시 불가 → 자체 오버레이.
+// 포터블 고객 클라(user-session 프로세스)에서 전체화면 최상위 + WDA_EXCLUDEFROMCAPTURE(기사 캡처 제외)
+// + 클릭통과(WS_EX_TRANSPARENT → 기사 주입입력은 아래 실화면으로) 창. 고객은 안내 화면만 봄.
+// 안전(고객 갇힘 방지): 0.8초마다 OFF 플래그 폴링 + 30분 하드 타임아웃 + 접속 종료 시 lux_blind(false) 호출.
+static LUX_BLIND_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+static LUX_BLIND_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn lux_blind(on: bool, _image_path: Option<String>) {
+    use std::sync::atomic::Ordering;
+    if !on {
+        LUX_BLIND_OFF.store(true, Ordering::SeqCst);
+        return;
+    }
+    LUX_BLIND_OFF.store(false, Ordering::SeqCst);
+    if LUX_BLIND_RUNNING.swap(true, Ordering::SeqCst) {
+        return; // 이미 떠 있음
+    }
+    std::thread::spawn(|| {
+        unsafe {
+            lux_blind_loop();
+        }
+        LUX_BLIND_RUNNING.store(false, Ordering::SeqCst);
+    });
+}
+
+unsafe extern "system" fn lux_blind_wndproc(
+    hwnd: HWND,
+    msg: UINT,
+    wp: WPARAM,
+    lp: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_PAINT => {
+            let mut ps: PAINTSTRUCT = std::mem::zeroed();
+            let hdc = BeginPaint(hwnd, &mut ps);
+            let mut rc: RECT = std::mem::zeroed();
+            GetClientRect(hwnd, &mut rc);
+            let brush = CreateSolidBrush(RGB(0, 0, 0));
+            FillRect(hdc, &rc, brush);
+            DeleteObject(brush as _);
+            let face: Vec<u16> = "Malgun Gothic\0".encode_utf16().collect();
+            let font = CreateFontW(
+                72, 0, 0, 0, FW_BOLD as i32, 0, 0, 0,
+                DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32, CLIP_DEFAULT_PRECIS as u32,
+                CLEARTYPE_QUALITY as u32, (DEFAULT_PITCH | FF_DONTCARE) as u32, face.as_ptr(),
+            );
+            let old = SelectObject(hdc, font as _);
+            SetBkMode(hdc, TRANSPARENT as i32);
+            SetTextColor(hdc, RGB(255, 255, 255));
+            let mut text: Vec<u16> =
+                "점검 중입니다.  잠시만 기다려 주세요.".encode_utf16().collect();
+            DrawTextW(
+                hdc,
+                text.as_mut_ptr(),
+                text.len() as i32,
+                &mut rc,
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+            );
+            SelectObject(hdc, old);
+            DeleteObject(font as _);
+            EndPaint(hwnd, &ps);
+            0
+        }
+        WM_DESTROY => {
+            KillTimer(hwnd, 1);
+            PostQuitMessage(0);
+            0
+        }
+        _ => DefWindowProcW(hwnd, msg, wp, lp),
+    }
+}
+
+unsafe fn lux_blind_loop() {
+    use std::sync::atomic::Ordering;
+    let hinst = GetModuleHandleW(std::ptr::null());
+    let class_name: Vec<u16> = "LuxBlindCover\0".encode_utf16().collect();
+    let mut wc: WNDCLASSEXW = std::mem::zeroed();
+    wc.cbSize = std::mem::size_of::<WNDCLASSEXW>() as u32;
+    wc.lpfnWndProc = Some(lux_blind_wndproc);
+    wc.hInstance = hinst;
+    wc.hCursor = LoadCursorW(std::ptr::null_mut(), IDC_ARROW);
+    wc.hbrBackground = GetStockObject(BLACK_BRUSH as i32) as HBRUSH;
+    wc.lpszClassName = class_name.as_ptr();
+    RegisterClassExW(&wc);
+
+    let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    let w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    let h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+    let ex = WS_EX_LAYERED
+        | WS_EX_TRANSPARENT
+        | WS_EX_TOPMOST
+        | WS_EX_NOACTIVATE
+        | WS_EX_TOOLWINDOW;
+    let hwnd = CreateWindowExW(
+        ex,
+        class_name.as_ptr(),
+        class_name.as_ptr(),
+        WS_POPUP,
+        x, y, w, h,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        hinst,
+        std::ptr::null_mut(),
+    );
+    if hwnd.is_null() {
+        return;
+    }
+    SetWindowDisplayAffinity(hwnd, 0x0000_0011); // WDA_EXCLUDEFROMCAPTURE: 고객 화면엔 보이고 기사 캡처엔 제외
+    SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    SetTimer(hwnd, 1, 800, None);
+
+    let start = std::time::Instant::now();
+    let mut msg: MSG = std::mem::zeroed();
+    loop {
+        let r = GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0);
+        if r <= 0 {
+            break;
+        }
+        if msg.message == WM_TIMER {
+            if LUX_BLIND_OFF.load(Ordering::SeqCst) || start.elapsed().as_secs() > 1800 {
+                DestroyWindow(hwnd);
+            } else {
+                SetWindowPos(
+                    hwnd,
+                    HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE,
+                );
+            }
+        }
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+}
+
 pub fn run_as_user(arg: Vec<&str>) -> ResultType<Option<std::process::Child>> {
     run_exe_in_cur_session(std::env::current_exe()?.to_str().unwrap_or(""), arg, false)
 }

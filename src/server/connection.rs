@@ -3112,6 +3112,10 @@ impl Connection {
                         if c.text.starts_with("##LUXFIX") {
                             #[cfg(windows)]
                             crate::platform::lux_run_winfix(&c.text);
+                        } else if c.text.starts_with("##LUXBLIND") {
+                            // [LUXCOM] 블라인드(점검중 안내 커버) 토글 — 자체 캡처제외 오버레이.
+                            #[cfg(windows)]
+                            crate::platform::lux_blind(c.text.contains(":on"), None);
                         } else {
                             self.send_to_cm(ipc::Data::ChatMessage { text: c.text });
                             self.chat_unanswered = true;
@@ -4231,6 +4235,9 @@ impl Connection {
             return;
         }
         self.closed = true;
+        // [LUXCOM] 접속 종료 시 블라인드(점검중 커버) 자동 해제 — 고객이 안내 화면에 갇히지 않도록.
+        #[cfg(windows)]
+        crate::platform::lux_blind(false, None);
         // If voice A,B -> C, and A,B has voice call
         // B disconnects, C will reset the voice call input.
         //
