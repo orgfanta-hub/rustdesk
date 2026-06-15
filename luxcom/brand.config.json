@@ -23,7 +23,7 @@
   },
 
   "theme": {
-    "accentColor": "#4F46E5",
+    "accentColor": "#0E8A7E",
     "_note": "앱 액센트(버튼·강조) 컬러 — RustDesk 파랑(0071FF) 대체. 세련된 인디고."
   },
 

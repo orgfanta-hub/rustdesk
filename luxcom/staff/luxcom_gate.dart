@@ -33,7 +33,7 @@ const Color _kCard = Color(0xFF181A30);
 const Color _kBorder = Color(0xFF2A2D4D);
 const Color _kSub = Color(0xFF9AA0C8);
 const Color _kMuted = Color(0xFF6B7099);
-const Color _kAccent = Color(0xFF4F46E5);
+const Color _kAccent = Color(0xFF0E8A7E);
 
 String _getTok() { try { return bind.mainGetLocalOption(key: _kTokKey); } catch (_) { return ''; } }
 Future<void> _setTok(String v) async { try { await bind.mainSetLocalOption(key: _kTokKey, value: v); } catch (_) {} }
@@ -302,7 +302,7 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: _kBorder),
               boxShadow: const [
-                BoxShadow(color: Color(0x554F46E5), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 18)),
+                BoxShadow(color: Color(0x550E8A7E), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 18)),
               ],
             ),
             child: Column(

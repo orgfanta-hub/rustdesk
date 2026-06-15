@@ -23,7 +23,7 @@ const Color _kBg = Color(0xFF0D0E1C);
 const Color _kCard = Color(0xFF181A30);
 const Color _kBorder = Color(0xFF2A2D4D);
 const Color _kSub = Color(0xFF9AA0C8);
-const Color _kAccent = Color(0xFF4F46E5);
+const Color _kAccent = Color(0xFF0E8A7E);
 
 /// 메인 창을 감싸 버전이 너무 오래되면 전체 화면을 막는 게이트. (양 프로필 공통)
 class LuxComVersionGate extends StatefulWidget {
