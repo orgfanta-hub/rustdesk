@@ -486,36 +486,25 @@ class _LuxFixMenu extends StatelessWidget {
     showToast('고객 PC에서 작업을 실행합니다.\n관리자(UAC) 창이 뜨면 화면에서 "예"를 눌러주세요.');
   }
 
-  // 블라인드(화면 가리기): RustDesk privacy mode 의 exclude_from_capture 임플을 직접 토글.
-  // → 고객 화면은 가려지고(검은화면) 기사 캡처에는 그대로 보임 + 고객 입력 차단 + 접속종료 자동해제.
-  // 기본 UI 는 pi.features.privacyMode 게이트로 숨겨져 있어, 여기서 게이트 없이 직접 호출한다(Win10 2004+ 필요).
-  void _blind(bool on) {
+  // 화면 가리기: RustDesk 정식 privacy mode 직접 토글.
+  // ★ 정식 모드는 win_input 으로 '고객 입력 차단'까지 하므로 기사가 마우스/키보드를 주입해도 풀리지 않는다.
+  //   (자작 오버레이[##LUXBLIND]는 입력 처리가 없어 기사 입력 시 풀렸음 → 메뉴에서 폐기)
+  // mag = Windows 확대경 API(플러그인·드라이버 0, RustDesk 기본/권장).
+  // virtual_display = 가상 모니터(usbmmidd, 고객 물리화면을 끄는 더 강력한 방식).
+  void _privacy(String impl, bool on) {
     bind.sessionTogglePrivacyMode(
-        sessionId: ffi.sessionId,
-        implKey: 'privacy_mode_impl_exclude_from_capture',
-        on: on);
-    showToast(on
-        ? '화면 가리기(검정)를 켭니다. 고객 화면은 가려지고 기사 화면엔 그대로 보입니다.\n(지원되지 않는 PC면 적용되지 않을 수 있습니다)'
-        : '화면 가리기(검정)를 끕니다.');
+        sessionId: ffi.sessionId, implKey: impl, on: on);
   }
 
-  // 점검중 안내 커버(자체 오버레이, 캡처 제외). 검정 대신 "점검 중입니다" 안내 화면.
-  void _overlay(bool on) {
-    bind.sessionSendChat(
-        sessionId: ffi.sessionId, text: on ? '##LUXBLIND:on' : '##LUXBLIND:off');
-    showToast(on
-        ? '고객 화면에 "점검 중입니다" 안내를 표시합니다. 기사 화면엔 실제 화면이 보입니다.'
-        : '안내 화면을 끕니다.');
-  }
-
-  // 화면 가리기 모두 해제(검정 privacy + 점검중 오버레이 둘 다).
-  void _blindAllOff() {
+  void _privacyOff() {
+    // 어느 임플이 켜져 있든 모두 해제.
+    bind.sessionTogglePrivacyMode(
+        sessionId: ffi.sessionId, implKey: 'privacy_mode_impl_mag', on: false);
     bind.sessionTogglePrivacyMode(
         sessionId: ffi.sessionId,
-        implKey: 'privacy_mode_impl_exclude_from_capture',
+        implKey: 'privacy_mode_impl_virtual_display',
         on: false);
-    bind.sessionSendChat(sessionId: ffi.sessionId, text: '##LUXBLIND:off');
-    showToast('화면 가리기를 모두 해제합니다.');
+    showToast('화면 가리기를 해제합니다.');
   }
 
   @override
@@ -560,16 +549,22 @@ class _LuxFixMenu extends StatelessWidget {
         const Divider(),
         MenuButton(
             ffi: ffi,
-            onPressed: () => _blind(true),
-            child: Text('화면 가리기 — 검정')),
+            onPressed: () {
+              _privacy('privacy_mode_impl_mag', true);
+              showToast('화면 가리기(확대경)를 켭니다. 고객 화면이 가려지고 기사 화면엔 그대로 보입니다.\n혹시 안 되면 아래 "가상화면"을 눌러보세요.');
+            },
+            child: Text('화면 가리기 — 확대경(1)')),
         MenuButton(
             ffi: ffi,
-            onPressed: () => _overlay(true),
-            child: Text('화면 가리기 — 점검중 안내')),
+            onPressed: () {
+              _privacy('privacy_mode_impl_virtual_display', true);
+              showToast('화면 가리기(가상화면)를 켭니다. 고객 모니터를 끄고 기사에게만 화면을 보냅니다.\n드라이버 설치 안내(UAC)가 뜨면 "예"를 눌러주세요.');
+            },
+            child: Text('화면 가리기 — 가상화면(2)')),
         MenuButton(
             ffi: ffi,
-            onPressed: () => _blindAllOff(),
-            child: Text('화면 가리기 모두 끄기')),
+            onPressed: () => _privacyOff(),
+            child: Text('화면 가리기 끄기')),
       ],
     );
   }
