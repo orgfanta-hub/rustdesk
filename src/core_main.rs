@@ -79,6 +79,13 @@ pub fn core_main() -> Option<Vec<String>> {
         }
         i += 1;
     }
+    // [LUXCOM] 블라인드 커버 진입점 — 고객 세션에 띄워진 `--lux-blind` 프로세스는
+    // RustDesk 본체 로직을 타지 않고 '점검 중' 오버레이 창만 그린 뒤 종료한다.
+    #[cfg(windows)]
+    if args.len() == 1 && args[0] == "--lux-blind" {
+        crate::platform::lux_blind_overlay_main();
+        return None;
+    }
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     if args.is_empty() {
         #[cfg(target_os = "linux")]

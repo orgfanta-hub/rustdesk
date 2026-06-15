@@ -956,25 +956,48 @@ pub fn lux_run_winfix(text: &str) {
 // 포터블 고객 클라(user-session 프로세스)에서 전체화면 최상위 + WDA_EXCLUDEFROMCAPTURE(기사 캡처 제외)
 // + 클릭통과(WS_EX_TRANSPARENT → 기사 주입입력은 아래 실화면으로) 창. 고객은 안내 화면만 봄.
 // 안전(고객 갇힘 방지): 0.8초마다 OFF 플래그 폴링 + 30분 하드 타임아웃 + 접속 종료 시 lux_blind(false) 호출.
-static LUX_BLIND_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-static LUX_BLIND_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// ON 플래그 파일(존재=켜짐). 별도 프로세스(고객 세션)라 메모리 공유 불가 →
+// 오버레이가 0.8초마다 이 파일을 확인해서 사라지면 스스로 종료한다.
+fn lux_blind_flag_path() -> std::path::PathBuf {
+    std::env::temp_dir().join("luxcom_blind.on")
+}
 
+// 연결처리(서버) 프로세스에서 호출. ★핵심: 직접 창을 만들지 않는다(서버가 SYSTEM/세션 0이면
+// 창이 고객 데스크톱에 안 뜨는 함정). 대신 현재 exe 를 `--lux-blind` 로 '고객 세션'에 띄운다
+// (run_as_user → SYSTEM이면 run_exe_in_session 으로 활성 세션 자동 전환). 그 프로세스가 오버레이를 그린다.
 pub fn lux_blind(on: bool, _image_path: Option<String>) {
-    use std::sync::atomic::Ordering;
+    let flag = lux_blind_flag_path();
     if !on {
-        LUX_BLIND_OFF.store(true, Ordering::SeqCst);
+        let _ = std::fs::remove_file(&flag);
+        log::info!("[luxblind] OFF — flag 제거(오버레이 자동 종료 대기)");
         return;
     }
-    LUX_BLIND_OFF.store(false, Ordering::SeqCst);
-    if LUX_BLIND_RUNNING.swap(true, Ordering::SeqCst) {
-        return; // 이미 떠 있음
+    if let Err(e) = std::fs::write(&flag, b"1") {
+        log::error!("[luxblind] ON flag 기록 실패: {}", e);
     }
-    std::thread::spawn(|| {
-        unsafe {
-            lux_blind_loop();
+    match run_as_user(vec!["--lux-blind"]) {
+        Ok(_) => log::info!("[luxblind] ON — 고객 세션에 오버레이 프로세스 실행 요청 완료"),
+        Err(e) => log::error!("[luxblind] 오버레이 프로세스 실행 실패: {}", e),
+    }
+}
+
+// `--lux-blind` 진입점(고객 세션 프로세스). 단일 인스턴스(중복 창 방지) 후 커버 루프.
+pub fn lux_blind_overlay_main() {
+    unsafe {
+        let name: Vec<u16> = "Global\\LuxBlindCoverMutex\0".encode_utf16().collect();
+        let _h =
+            winapi::um::synchapi::CreateMutexW(std::ptr::null_mut(), TRUE, name.as_ptr());
+        if winapi::um::errhandlingapi::GetLastError()
+            == winapi::shared::winerror::ERROR_ALREADY_EXISTS
+        {
+            log::info!("[luxblind] 오버레이 이미 실행 중 — 중복 방지 종료");
+            return;
         }
-        LUX_BLIND_RUNNING.store(false, Ordering::SeqCst);
-    });
+        let sid = get_current_session_id(false);
+        log::info!("[luxblind] 오버레이 시작 (session={})", sid);
+        lux_blind_loop();
+        log::info!("[luxblind] 오버레이 종료");
+    }
 }
 
 unsafe extern "system" fn lux_blind_wndproc(
@@ -1025,7 +1048,6 @@ unsafe extern "system" fn lux_blind_wndproc(
 }
 
 unsafe fn lux_blind_loop() {
-    use std::sync::atomic::Ordering;
     let hinst = winapi::um::libloaderapi::GetModuleHandleW(std::ptr::null());
     let class_name: Vec<u16> = "LuxBlindCover\0".encode_utf16().collect();
     let mut wc: WNDCLASSEXW = std::mem::zeroed();
@@ -1059,8 +1081,10 @@ unsafe fn lux_blind_loop() {
         std::ptr::null_mut(),
     );
     if hwnd.is_null() {
+        log::error!("[luxblind] 커버 창 생성 실패: {}", std::io::Error::last_os_error());
         return;
     }
+    log::info!("[luxblind] 커버 창 생성 OK — 표시 시작");
     SetWindowDisplayAffinity(hwnd, 0x0000_0011); // WDA_EXCLUDEFROMCAPTURE: 고객 화면엔 보이고 기사 캡처엔 제외
     SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -1076,7 +1100,8 @@ unsafe fn lux_blind_loop() {
             break;
         }
         if msg.message == WM_TIMER {
-            if LUX_BLIND_OFF.load(Ordering::SeqCst) || start.elapsed().as_secs() > 1800 {
+            let off = !lux_blind_flag_path().exists();
+            if off || start.elapsed().as_secs() > 1800 {
                 DestroyWindow(hwnd);
             } else {
                 SetWindowPos(
