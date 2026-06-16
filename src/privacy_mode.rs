@@ -17,7 +17,7 @@ use std::{
 #[cfg(windows)]
 pub mod win_exclude_from_capture;
 #[cfg(windows)]
-mod win_input;
+pub mod win_input; // [LUXCOM] 자작 블라인드(lux_blind_overlay_main)에서 입력차단 hook 재사용
 #[cfg(windows)]
 pub mod win_mag;
 #[cfg(windows)]

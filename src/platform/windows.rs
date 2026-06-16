@@ -995,8 +995,15 @@ pub fn lux_blind_overlay_main() {
         }
         let sid = get_current_session_id(false);
         log::info!("[luxblind] 오버레이 시작 (session={})", sid);
+        // 고객 물리입력 차단(기사 enigo 주입은 통과) — RustDesk privacy 의 win_input hook 재사용.
+        // 이게 있어야 기사가 마우스/키보드를 움직여도 가림이 풀리지 않는다.
+        match crate::privacy_mode::win_input::hook() {
+            Ok(_) => log::info!("[luxblind] 입력차단 hook ON (고객 물리입력 차단)"),
+            Err(e) => log::error!("[luxblind] 입력차단 hook 실패: {}", e),
+        }
         lux_blind_loop();
-        log::info!("[luxblind] 오버레이 종료");
+        let _ = crate::privacy_mode::win_input::unhook();
+        log::info!("[luxblind] 오버레이+hook 종료");
     }
 }
 

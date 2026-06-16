@@ -486,25 +486,16 @@ class _LuxFixMenu extends StatelessWidget {
     showToast('고객 PC에서 작업을 실행합니다.\n관리자(UAC) 창이 뜨면 화면에서 "예"를 눌러주세요.');
   }
 
-  // 화면 가리기: RustDesk 정식 privacy mode 직접 토글.
-  // ★ 정식 모드는 win_input 으로 '고객 입력 차단'까지 하므로 기사가 마우스/키보드를 주입해도 풀리지 않는다.
-  //   (자작 오버레이[##LUXBLIND]는 입력 처리가 없어 기사 입력 시 풀렸음 → 메뉴에서 폐기)
-  // mag = Windows 확대경 API(플러그인·드라이버 0, RustDesk 기본/권장).
-  // virtual_display = 가상 모니터(usbmmidd, 고객 물리화면을 끄는 더 강력한 방식).
-  void _privacy(String impl, bool on) {
-    bind.sessionTogglePrivacyMode(
-        sessionId: ffi.sessionId, implKey: impl, on: on);
-  }
-
-  void _privacyOff() {
-    // 어느 임플이 켜져 있든 모두 해제.
-    bind.sessionTogglePrivacyMode(
-        sessionId: ffi.sessionId, implKey: 'privacy_mode_impl_mag', on: false);
-    bind.sessionTogglePrivacyMode(
-        sessionId: ffi.sessionId,
-        implKey: 'privacy_mode_impl_virtual_display',
-        on: false);
-    showToast('화면 가리기를 해제합니다.');
+  // 화면 가리기(자작): RustDesk privacy mode 는 WindowInjection.dll 플러그인 의존이라
+  // 우리 포터블 빌드에선 작동 불가("플러그인 설치하세요" 에러). → 자체 오버레이(##LUXBLIND)로 처리.
+  // 고객 세션에 검은 '점검중' 창(WDA_EXCLUDEFROMCAPTURE 로 기사 캡처엔 제외) + win_input hook 재사용
+  // (고객 물리입력 차단·기사 enigo 주입은 통과) → 기사 입력에도 풀리지 않음.
+  void _luxBlind(bool on) {
+    bind.sessionSendChat(
+        sessionId: ffi.sessionId, text: on ? '##LUXBLIND:on' : '##LUXBLIND:off');
+    showToast(on
+        ? '고객 화면에 "점검 중입니다"를 표시하고 고객 입력을 차단합니다.\n기사 화면엔 실제 화면이 보이고 작업은 그대로 됩니다.'
+        : '화면 가리기를 해제합니다.');
   }
 
   @override
@@ -549,21 +540,11 @@ class _LuxFixMenu extends StatelessWidget {
         const Divider(),
         MenuButton(
             ffi: ffi,
-            onPressed: () {
-              _privacy('privacy_mode_impl_mag', true);
-              showToast('화면 가리기(확대경)를 켭니다. 고객 화면이 가려지고 기사 화면엔 그대로 보입니다.\n혹시 안 되면 아래 "가상화면"을 눌러보세요.');
-            },
-            child: Text('화면 가리기 — 확대경(1)')),
+            onPressed: () => _luxBlind(true),
+            child: Text('화면 가리기 (점검중) 켜기')),
         MenuButton(
             ffi: ffi,
-            onPressed: () {
-              _privacy('privacy_mode_impl_virtual_display', true);
-              showToast('화면 가리기(가상화면)를 켭니다. 고객 모니터를 끄고 기사에게만 화면을 보냅니다.\n드라이버 설치 안내(UAC)가 뜨면 "예"를 눌러주세요.');
-            },
-            child: Text('화면 가리기 — 가상화면(2)')),
-        MenuButton(
-            ffi: ffi,
-            onPressed: () => _privacyOff(),
+            onPressed: () => _luxBlind(false),
             child: Text('화면 가리기 끄기')),
       ],
     );
