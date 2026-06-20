@@ -32,6 +32,10 @@ if (!prof) {
   process.exit(1);
 }
 
+// 안드로이드 빌드 타깃 여부 — CI 의 안드로이드 잡에서 LUX_ANDROID=1 로 설정(데스크톱 빌드는 미설정).
+// config.rs(서버·키·수신전용·자동업뎃)는 Rust 공통이라 양 타깃 자동 적용. 안드로이드 자원 패치만 이 플래그로 분기.
+const IS_ANDROID = process.env.LUX_ANDROID === '1' || process.argv.includes('--android');
+
 const report = [];
 let hardFail = false;
 
@@ -386,6 +390,93 @@ if (cfg.update && cfg.update.urlBase) {
   }
 } else {
   log('SKIP', '자동 업데이트 405.kr 연동', 'cfg.update.urlBase 미설정');
+}
+
+// ── [안드로이드] 표시이름·패키지·접근성·아이콘 (LUX_ANDROID=1 일 때만) ──
+// config.rs(서버·키·APP_NAME·is_incoming_only·is_disable_account·자동업뎃)는 Rust 공통이라
+// 안드로이드 빌드(librustdesk.so)에도 이미 적용됨. 여기서는 데스크톱에 없던 '안드로이드 자원'만 추가 패치.
+// 데스크톱 빌드에선 LUX_ANDROID 미설정 → 이 블록 전체 SKIP.
+if (IS_ANDROID && cfg.android) {
+  const A = cfg.android;
+  const appLabel = A.appLabel || prof.productName;   // 미설정 시 프로필 제품명 사용(consumer=럭스시스템 원격지원)
+  const AM = path.join('flutter', 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  const STRINGS = path.join('flutter', 'android', 'app', 'src', 'main', 'res', 'values', 'strings.xml');
+  const APP_GRADLE = path.join('flutter', 'android', 'app', 'build.gradle');
+  const ICBG = path.join('flutter', 'android', 'app', 'src', 'main', 'res', 'values', 'ic_launcher_background.xml');
+  const COLORS = path.join('flutter', 'android', 'app', 'src', 'main', 'res', 'values', 'colors.xml');
+
+  console.log(`\n--- 안드로이드 자원 패치 (label='${appLabel}', id='${A.applicationId || '(유지)'}') ---`);
+
+  // 1) 런처 표시이름 — AndroidManifest application label (정확히 "RustDesk")
+  patch(AM, '안드로이드 표시이름(Manifest android:label)', /android:label="RustDesk"/, `android:label="${appLabel}"`, { required: true });
+  // 2) strings.xml app_name
+  patch(STRINGS, '안드로이드 app_name(strings.xml)', /(<string name="app_name">)[^<]*(<\/string>)/, `$1${appLabel}$2`, { required: true });
+  // 3) 접근성 입력 서비스 라벨(InputService) — 접근성 설정화면 표기
+  if (A.accessibilityLabel) {
+    patch(AM, '안드로이드 접근성 입력 라벨(InputService)', /android:label="RustDesk Input"/, `android:label="${A.accessibilityLabel}"`);
+  }
+  // 4) 접근성 설명(접근성 설정화면 안내문구)
+  if (A.accessibilityDescription) {
+    patch(STRINGS, '안드로이드 접근성 설명', /(<string name="accessibility_service_description">)[^<]*(<\/string>)/, `$1${A.accessibilityDescription}$2`);
+  }
+  // 5) applicationId (코드패키지 com.carriez.flutter_hbb 는 유지 — Kotlin import/R/딥링크 보호)
+  if (A.applicationId) {
+    patch(APP_GRADLE, '안드로이드 applicationId', /applicationId\s+"com\.carriez\.flutter_hbb"/, `applicationId "${A.applicationId}"`, { required: true });
+  }
+  // 6) 적응형 아이콘 배경색(선택)
+  if (A.launcherBackgroundColor) {
+    patch(ICBG, '안드로이드 런처 배경색(ic_launcher_background)', /(<color name="ic_launcher_background">)[^<]*(<\/color>)/, `$1${A.launcherBackgroundColor}$2`);
+  }
+  // 7) 액센트 컬러(colors.xml primary: RustDesk 파랑 0071FF → 브랜드) — theme.accentColor 재사용
+  if (cfg.theme && cfg.theme.accentColor) {
+    const hex = cfg.theme.accentColor.replace('#', '').toUpperCase();
+    patchFiles([COLORS], `안드로이드 액센트 컬러 → #${hex}`, /0071FF/gi, hex);
+  }
+  // 8) 런처 아이콘 비트맵 교체(assets/android/ 제공 시; 원본에 있는 아이콘만 교체 → 누락 안전)
+  (function applyAndroidIcons() {
+    const label = '안드로이드 런처 아이콘 교체(mipmap)';
+    const srcRoot = path.join(builderRoot, 'assets', 'android');
+    if (!fs.existsSync(srcRoot)) { log('SKIP', label, 'assets/android/ 없음 → RustDesk 기본 아이콘 유지(로고 제공 시 교체)'); return; }
+    const sizes = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
+    const iconNames = ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png', 'ic_stat_logo.png'];
+    const single = ['ic_launcher.png', 'logo.png'].map(f => path.join(srcRoot, f)).find(fs.existsSync);
+    let n = 0;
+    for (const d of Object.keys(sizes)) {
+      const tgtDir = path.join(repoDir, 'flutter', 'android', 'app', 'src', 'main', 'res', `mipmap-${d}`);
+      if (!fs.existsSync(tgtDir)) continue;
+      for (const icon of iconNames) {
+        const tgt = path.join(tgtDir, icon);
+        if (!fs.existsSync(tgt)) continue;                       // 원본에 존재하는 아이콘만 교체
+        const perSrc = path.join(srcRoot, `mipmap-${d}`, icon);  // (a) 밀도별 소스 우선
+        if (fs.existsSync(perSrc)) { fs.copyFileSync(perSrc, tgt); n++; continue; }
+        if (single) {                                            // (b) 단일 소스 → ImageMagick 리사이즈
+          let resized = false;
+          for (const bin of ['magick', 'convert']) {
+            try { execSync(`${bin} "${single}" -resize ${sizes[d]}x${sizes[d]} "${tgt}"`, { stdio: 'ignore' }); n++; resized = true; break; } catch { /* 다음 후보 */ }
+          }
+          if (!resized) { fs.copyFileSync(single, tgt); n++; }   // ImageMagick 없으면 원본 그대로(크기 비최적이나 동작)
+        }
+      }
+    }
+    log(n > 0 ? 'OK' : 'WARN', label, n > 0 ? `${n}개 교체` : '교체할 소스 없음(assets/android/ 에 밀도별 폴더 또는 ic_launcher.png)');
+  })();
+
+  // 9) 안드로이드 mobile home(HomePage) 게이트 래핑 — 버전게이트(+staff 로그인게이트)
+  //    데스크톱 패치는 DesktopTabPage 를 감싸지만 안드로이드 home 은 HomePage() 이므로 별도 래핑.
+  //    luxcom_version.dart / (staff)luxcom_gate.dart 는 위 공통 블록에서 이미 copy+import 됨.
+  //    main.dart App.build(): `isDesktop ? const DesktopTabPage() : isWeb ? WebHomePage() : HomePage()`
+  {
+    const MAIN = path.join('flutter', 'lib', 'main.dart');
+    const innerMobile = (prof.requireLogin && cfg.auth && cfg.auth.loginUrl) ? 'LuxComGate(child: HomePage())' : 'HomePage()';
+    patch(
+      MAIN, '안드로이드 home 게이트 래핑(HomePage)',
+      /:\s*HomePage\(\)/,
+      `: LuxComVersionGate(child: ${innerMobile})`,
+      { required: !!prof.requireLogin }   // staff=로그인게이트 필수(hardFail), consumer=버전게이트 best-effort
+    );
+  }
+} else if (IS_ANDROID) {
+  log('WARN', '안드로이드 패치', 'cfg.android 섹션 없음 — brand.config.json 에 android 섹션 추가 필요');
 }
 
 // ── 리포트 ─────────────────────────────────────────────────────────

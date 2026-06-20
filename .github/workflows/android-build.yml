@@ -1,0 +1,306 @@
+# 럭스시스템 안드로이드 빌드 — fork 의 .github/workflows/android-build.yml 로 둘 자체완결형 워크플로.
+# 데스크톱 luxcom-build.yml 과 동일 패턴(generate-bridge + workflow_dispatch profile + LuxCom branding).
+# RustDesk 1.4.6 flutter-build.yml 의 build-rustdesk-android 잡을 가져와, Rust 컴파일(Build rustdesk lib)
+# 직전에 브랜딩(LUX_ANDROID=1)을 주입한다. config.rs(서버405.kr·키·수신전용·자동업뎃)는 .so 에,
+# 안드로이드 자원(표시이름·패키지·아이콘·접근성)은 APK 에 박힌다.
+#
+# 실행:  Actions → "LuxCom Android Build" → Run workflow → profile=consumer | staff
+# 산출:  실행 결과 → Artifacts → luxcom-<profile>-android-<arch>  (arch = aarch64 / armv7 / x86_64)
+#        보통 폰은 aarch64(arm64-v8a) APK 설치.
+#
+# 서명(설치 가능 APK):  fork → Settings → Secrets 에 4개 등록
+#   ANDROID_SIGNING_KEY (keystore base64) · ANDROID_ALIAS · ANDROID_KEY_STORE_PASSWORD · ANDROID_KEY_PASSWORD
+#   미설정 시 ...-UNSIGNED APK(설치 불가, 빌드 확인용)만 산출.
+#
+# 전제(fork 에 있어야 함):  luxcom/brand.config.json, luxcom/scripts/apply-branding.mjs,
+#   luxcom/assets/android/(아이콘·선택),  .github/workflows/bridge.yml(generate-bridge·데스크톱과 공유)
+name: LuxCom Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "consumer (소비자 수신전용) / staff (기사 풀기능)"
+        type: choice
+        options: [consumer, staff]
+        default: consumer
+
+env:
+  RUST_VERSION: "1.75"
+  CARGO_NDK_VERSION: "3.1.2"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VERSION: "1.4.6"
+  NDK_VERSION: "r27c"
+  ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
+
+jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+
+  build-rustdesk-android:
+    needs: [generate-bridge]
+    name: LuxCom Android ${{ github.event.inputs.profile }} ${{ matrix.job.arch }}
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { arch: aarch64, target: aarch64-linux-android, os: ubuntu-24.04, reltype: release, suffix: "" }
+          - { arch: armv7, target: armv7-linux-androideabi, os: ubuntu-24.04, reltype: release, suffix: "" }
+          - { arch: x86_64, target: x86_64-linux-android, os: ubuntu-24.04, reltype: release, suffix: "" }
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+               clang \
+               cmake \
+               curl \
+               gcc-multilib \
+               git \
+               g++ \
+               g++-multilib \
+               libayatana-appindicator3-dev \
+               libasound2-dev \
+               libc6-dev \
+               libclang-dev \
+               libunwind-dev \
+               libgstreamer1.0-dev \
+               libgstreamer-plugins-base1.0-dev \
+               libgtk-3-dev \
+               libpam0g-dev \
+               libpulse-dev \
+               libva-dev \
+               libxcb-randr0-dev \
+               libxcb-shape0-dev \
+               libxcb-xfixes0-dev \
+               libxdo-dev \
+               libxfixes-dev \
+               llvm-dev \
+               nasm \
+               ninja-build \
+               openjdk-17-jdk-headless \
+               pkg-config \
+               tree \
+               wget
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        run: |
+          case ${{ matrix.job.target }} in
+            aarch64-linux-android)
+              ANDROID_TARGET=arm64-v8a
+            ;;
+            armv7-linux-androideabi)
+              ANDROID_TARGET=armeabi-v7a
+            ;;
+            x86_64-linux-android)
+              ANDROID_TARGET=x86_64
+            ;;
+            i686-linux-android)
+              ANDROID_TARGET=x86
+            ;;
+          esac
+          if ! ./flutter/build_android_deps.sh "${ANDROID_TARGET}"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+              echo "$_1:"
+              echo "======"
+              cat "$_1"
+              echo "======"
+              echo ""
+            done
+            exit 1
+          fi
+        shell: bash
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: rustdesk-lib-cache-android
+          key: ${{ matrix.job.target }}
+
+      # ───── 럭스시스템 안드로이드 브랜딩 (★Rust 컴파일 직전에 주입) ─────
+      # config.rs(서버405.kr·공개키·is_incoming_only·자동업뎃) + 안드로이드 자원
+      # (AndroidManifest 표시이름·strings·applicationId·아이콘·접근성문구) 패치.
+      - name: LuxCom branding (Android — server + mode + brand)
+        shell: bash
+        env:
+          BRAND_CONFIG: luxcom/brand.config.json
+          PROFILE: ${{ github.event.inputs.profile }}
+          LUX_ANDROID: "1"
+        run: |
+          node luxcom/scripts/apply-branding.mjs .
+          echo "----- LuxCom branding report -----"
+          cat "LUXCOM_BRANDING_REPORT.${PROFILE}.md" || true
+
+      - name: Build rustdesk lib
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          rustup target add ${{ matrix.job.target }}
+          cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+          case ${{ matrix.job.target }} in
+            aarch64-linux-android)
+              ./flutter/ndk_arm64.sh
+              mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+            ;;
+            armv7-linux-androideabi)
+              ./flutter/ndk_arm.sh
+              mkdir -p ./flutter/android/app/src/main/jniLibs/armeabi-v7a
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
+            ;;
+            x86_64-linux-android)
+              ./flutter/ndk_x64.sh
+              mkdir -p ./flutter/android/app/src/main/jniLibs/x86_64
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86_64/librustdesk.so
+            ;;
+            i686-linux-android)
+              ./flutter/ndk_x86.sh
+              mkdir -p ./flutter/android/app/src/main/jniLibs/x86
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86/librustdesk.so
+            ;;
+          esac
+
+      - name: Build rustdesk
+        shell: bash
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        run: |
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+          # Increase Gradle JVM memory for CI builds
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties
+          # temporary use debug sign config (실서명은 아래 r0adkll Sign 단계에서)
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          case ${{ matrix.job.target }} in
+            aarch64-linux-android)
+              mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+              cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+              pushd flutter
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm64 --split-per-abi
+              mv build/app/outputs/flutter-apk/app-arm64-v8a-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+            ;;
+            armv7-linux-androideabi)
+              mkdir -p ./flutter/android/app/src/main/jniLibs/armeabi-v7a
+              cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
+              pushd flutter
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm --split-per-abi
+              mv build/app/outputs/flutter-apk/app-armeabi-v7a-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+            ;;
+            x86_64-linux-android)
+              mkdir -p ./flutter/android/app/src/main/jniLibs/x86_64
+              cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/x86_64/
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86_64/librustdesk.so
+              pushd flutter
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x64 --split-per-abi
+              mv build/app/outputs/flutter-apk/app-x86_64-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+            ;;
+            i686-linux-android)
+              mkdir -p ./flutter/android/app/src/main/jniLibs/x86
+              cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/x86/
+              cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86/librustdesk.so
+              pushd flutter
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x86 --split-per-abi
+              mv build/app/outputs/flutter-apk/app-x86-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+            ;;
+          esac
+          popd
+          mkdir -p signed-apk; pushd signed-apk
+          mv ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .
+
+      # https://github.com/r0adkll/sign-android-release/issues/84#issuecomment-1889636075
+      - name: Setup sign tool version variable
+        shell: bash
+        run: |
+          BUILD_TOOL_VERSION=$(ls /usr/local/lib/android/sdk/build-tools/ | tail -n 1)
+          echo "ANDROID_SIGN_TOOL_VERSION=$BUILD_TOOL_VERSION" >> $GITHUB_ENV
+          echo Last build tool version is: $BUILD_TOOL_VERSION
+
+      - uses: r0adkll/sign-android-release@v1
+        name: Sign app APK
+        if: env.ANDROID_SIGNING_KEY != null
+        id: sign-rustdesk
+        with:
+          releaseDirectory: ./signed-apk
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: ${{ env.ANDROID_SIGN_TOOL_VERSION }}
+
+      - name: Upload signed APK (설치 가능)
+        if: env.ANDROID_SIGNING_KEY != null
+        uses: actions/upload-artifact@v4
+        with:
+          name: luxcom-${{ github.event.inputs.profile }}-android-${{ matrix.job.arch }}
+          path: ${{ steps.sign-rustdesk.outputs.signedReleaseFile }}
+
+      - name: Upload UNSIGNED APK (서명키 미설정 — 설치 불가, 빌드 확인용)
+        if: env.ANDROID_SIGNING_KEY == null
+        uses: actions/upload-artifact@v4
+        with:
+          name: luxcom-${{ github.event.inputs.profile }}-android-${{ matrix.job.arch }}-UNSIGNED
+          path: signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk

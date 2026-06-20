@@ -24,7 +24,7 @@
 
   "theme": {
     "accentColor": "#0E8A7E",
-    "_note": "앱 액센트(버튼·강조) 컬러 — RustDesk 파랑(0071FF) 대체. 세련된 인디고."
+    "_note": "앱 액센트(버튼·강조) 컬러 — RustDesk 파랑(0071FF) 대체. 소프트 틸(LuxSystem 디자인 시스템)."
   },
 
   "auth": {
@@ -47,6 +47,17 @@
     "ico": "assets/app_icon.ico",
     "png": "assets/logo.png",
     "_note": "app_icon.ico 있으면 우선 사용. 없으면 logo.png 를 ImageMagick 으로 .ico 변환 시도."
+  },
+
+  "android": {
+    "_comment": "안드로이드 APK 화이트라벨. config.rs(서버·키·수신전용·자동업뎃)는 Rust 공통이라 데스크톱 패치 그대로 자동 적용되고, 여기 값은 안드로이드 자원(표시이름·패키지·접근성·아이콘)만 추가 패치한다. LUX_ANDROID=1 일 때만 적용. 1차 = PROFILE=consumer(수신전용).",
+    "_appLabelNote": "런처 표시이름. 미설정 시 해당 프로필 productName 사용(consumer=럭스시스템 원격지원, staff=405 원격관리). 다른 이름 원하면 appLabel 키 추가.",
+    "applicationId": "kr.luxcom.remote",
+    "accessibilityLabel": "LuxCom 원격 입력",
+    "accessibilityDescription": "럭스시스템 원격지원 연결 시 가상 터치로 이 기기를 제어할 수 있도록 허용합니다.",
+    "launcherBackgroundColor": "#0E8A7E",
+    "_iconNote": "런처 아이콘 = luxcom/assets/android/. 밀도별 폴더(mipmap-mdpi…xxxhdpi/ic_launcher.png) 권장, 없으면 단일 ic_launcher.png(고해상도)를 ImageMagick 로 리사이즈. 미제공 시 RustDesk 기본 아이콘 유지(빌드는 정상).",
+    "_staffNote": "staff(기사 풀기능)도 안드로이드 지원(2026-06-18): 로그인게이트를 모바일 home(HomePage)에 래핑, 로그인화면의 데스크톱 창버튼은 모바일에서 숨김(window_manager 호출은 원래 try/catch라 안전). consumer/staff 둘 다 PROFILE 로 빌드."
   },
 
   "defaultProfile": "consumer",

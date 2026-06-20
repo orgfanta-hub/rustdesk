@@ -273,8 +273,8 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
     return Scaffold(
       backgroundColor: _kBg,
       body: Stack(children: [
-        // 상단 드래그 영역(타이틀바 숨김이라 창 이동용)
-        Positioned(
+        // 상단 드래그 영역(타이틀바 숨김이라 창 이동용) — 데스크톱만(모바일은 창 개념 없음)
+        if (!Platform.isAndroid && !Platform.isIOS) Positioned(
           top: 0, left: 0, right: 0, height: 46,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -282,8 +282,8 @@ class _LuxComLoginPageState extends State<_LuxComLoginPage> {
             child: const SizedBox.expand(),
           ),
         ),
-        // 우상단 최소화 / 종료 버튼
-        Positioned(
+        // 우상단 최소화 / 종료 버튼 — 데스크톱만
+        if (!Platform.isAndroid && !Platform.isIOS) Positioned(
           top: 8, right: 10,
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             _winBtn(Icons.remove, () { try { windowManager.minimize(); } catch (_) {} }),
