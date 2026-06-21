@@ -166,12 +166,17 @@ class _LuxComGateState extends State<LuxComGate> {
       );
     }
     if (_authed) {
-      // 인증 후 메인 화면 + 우하단 떠있는 로그아웃 버튼
+      // 인증 후 메인 화면 + 떠있는 로그아웃 버튼.
+      // 모바일은 하단 탭바(연결/채팅/화면공유/설정)를 가리지 않도록 탭바 높이 + 안전영역만큼 위로 올린다.
+      // 데스크톱은 탭바가 없으므로 창 우하단 모서리에 그대로 둔다.
+      final bool _isMobile = Platform.isAndroid || Platform.isIOS;
       return Stack(children: [
         widget.child,
         Positioned(
           right: 12,
-          bottom: 12,
+          bottom: _isMobile
+              ? kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom + 12
+              : 12,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
