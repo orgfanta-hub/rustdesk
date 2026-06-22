@@ -55,7 +55,7 @@
     "applicationId": "kr.luxcom.remote",
     "accessibilityLabel": "LuxCom 원격 입력",
     "accessibilityDescription": "럭스시스템 원격지원 연결 시 가상 터치로 이 기기를 제어할 수 있도록 허용합니다.",
-    "launcherBackgroundColor": "#0E8A7E",
+    "launcherBackgroundColor": "#232A45",
     "_iconNote": "런처 아이콘 = luxcom/assets/android/. 밀도별 폴더(mipmap-mdpi…xxxhdpi/ic_launcher.png) 권장, 없으면 단일 ic_launcher.png(고해상도)를 ImageMagick 로 리사이즈. 미제공 시 RustDesk 기본 아이콘 유지(빌드는 정상).",
     "_staffNote": "staff(기사 풀기능)도 안드로이드 지원(2026-06-18): 로그인게이트를 모바일 home(HomePage)에 래핑, 로그인화면의 데스크톱 창버튼은 모바일에서 숨김(window_manager 호출은 원래 try/catch라 안전). consumer/staff 둘 다 PROFILE 로 빌드."
   },
