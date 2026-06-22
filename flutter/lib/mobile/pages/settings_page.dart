@@ -711,38 +711,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             ],
           ),
         SettingsSection(title: Text(translate("Settings")), tiles: [
-          if (!disabledSettings && !_hideNetwork && !_hideServer)
-            SettingsTile(
-                title: Text(translate('ID/Relay Server')),
-                leading: Icon(Icons.cloud),
-                onPressed: (context) {
-                  showServerSettings(gFFI.dialogManager, (callback) async {
-                    _isUsingPublicServer = await bind.mainIsUsingPublicServer();
-                    setState(callback);
-                  });
-                }),
-          if (!_hideNetwork && !_hideProxy)
-            SettingsTile(
-                title: Text(translate('Socks5/Http(s) Proxy')),
-                leading: Icon(Icons.network_ping),
-                onPressed: (context) {
-                  changeSocks5Proxy();
-                }),
-          if (!disabledSettings && !_hideNetwork && !_hideWebSocket)
-            SettingsTile.switchTile(
-              title: Text(translate('Use WebSocket')),
-              initialValue: _allowWebSocket,
-              onToggle: isOptionFixed(kOptionAllowWebSocket)
-                  ? null
-                  : (v) async {
-                      await mainSetBoolOption(kOptionAllowWebSocket, v);
-                      final newValue =
-                          await mainGetBoolOption(kOptionAllowWebSocket);
-                      setState(() {
-                        _allowWebSocket = newValue;
-                      });
-                    },
-            ),
+          // LuxCom: 릴레이서버/Socks5·HTTP프록시/웹소켓 항목 제거(고정 서버 — 불필요)
           if (!_isUsingPublicServer)
             SettingsTile.switchTile(
               title: Text(translate('Allow insecure TLS fallback')),
@@ -775,32 +744,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                       });
                     },
             ),
-          if (!incomingOnly)
-            SettingsTile.switchTile(
-              title: Text(translate('Enable UDP hole punching')),
-              initialValue: _enableUdpPunch,
-              onToggle: (v) async {
-                await mainSetLocalBoolOption(kOptionEnableUdpPunch, v);
-                final newValue =
-                    mainGetLocalBoolOptionSync(kOptionEnableUdpPunch);
-                setState(() {
-                  _enableUdpPunch = newValue;
-                });
-              },
-            ),
-          if (!incomingOnly)
-            SettingsTile.switchTile(
-              title: Text(translate('Enable IPv6 P2P connection')),
-              initialValue: _enableIpv6Punch,
-              onToggle: (v) async {
-                await mainSetLocalBoolOption(kOptionEnableIpv6Punch, v);
-                final newValue =
-                    mainGetLocalBoolOptionSync(kOptionEnableIpv6Punch);
-                setState(() {
-                  _enableIpv6Punch = newValue;
-                });
-              },
-            ),
+          // LuxCom: UDP 홀펀칭/IPv6 P2P 항목 제거(고정 서버 — 불필요)
           SettingsTile(
               title: Text(translate('Language')),
               leading: Icon(Icons.translate),
