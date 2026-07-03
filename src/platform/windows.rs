@@ -766,7 +766,7 @@ $R+=Bak $ws 'EnableSecuritySignature'
 $R+=Bak $pr 'RpcAuthnLevelPrivacyEnabled'
 $R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0"
 $R+="Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0"
-$R+="Restart-Service LanmanWorkstation -Force -EA 0"
+$R+="try{ `$w=Get-Service LanmanWorkstation -EA 0; if(`$w.Status -ne 'Stopped'){ Stop-Service LanmanWorkstation -Force -EA 0; `$w.WaitForStatus('Stopped','00:00:15') }; Start-Service LanmanWorkstation -EA 0; (Get-Service LanmanWorkstation).WaitForStatus('Running','00:00:15') }catch{}; Start-Service Browser -EA 0"
 $R | Set-Content "$dir\winfix_restore.ps1" -Encoding UTF8
 New-ItemProperty -Path $ws -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $ws -Name 'RequireSecuritySignature' -Value 0 -PropertyType DWord -Force | Out-Null
@@ -774,8 +774,13 @@ New-ItemProperty -Path $ws -Name 'EnableSecuritySignature' -Value 0 -PropertyTyp
 New-ItemProperty -Path $pr -Name 'RpcAuthnLevelPrivacyEnabled' -Value 0 -PropertyType DWord -Force | Out-Null
 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-32752' -EA 0
 Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28502' -EA 0
-foreach($s in 'FDResPub','fdPHost','SSDPSRV','upnphost','LanmanServer','LanmanWorkstation'){ Set-Service $s -StartupType Automatic -EA 0; Start-Service $s -EA 0 }
-Restart-Service LanmanWorkstation -Force -EA 0
+foreach($s in 'FDResPub','fdPHost','SSDPSRV','upnphost','LanmanServer'){ Set-Service $s -StartupType Automatic -EA 0; Start-Service $s -EA 0 }
+# [LUXCOM] LanmanWorkstation(SMB 클라이언트) 안전 재시작 — 기존엔 Start 직후 곧바로 Restart-Service -Force 라
+#   START_PENDING 경합으로 서비스가 '중지'된 채 남는 사고가 있었다. Stop(완전정지 대기)->Start(실행 대기, 최대 3회)로 교체.
+Set-Service LanmanWorkstation -StartupType Automatic -EA 0
+try{ $w=Get-Service LanmanWorkstation -EA 0; if($w -and $w.Status -ne 'Stopped'){ Stop-Service LanmanWorkstation -Force -EA 0; $w.WaitForStatus('Stopped','00:00:15') } }catch{}
+for($i=0;$i -lt 3;$i++){ try{ Start-Service LanmanWorkstation -EA 0; (Get-Service LanmanWorkstation).WaitForStatus('Running','00:00:15') }catch{}; if((Get-Service LanmanWorkstation -EA 0).Status -eq 'Running'){ break } }
+Start-Service Browser -EA 0
 "#;
 const LUX_WINFIX_RESTORE: &str = r#"$ErrorActionPreference='SilentlyContinue'
 $f="$env:ProgramData\LuxCom\winfix_restore.ps1"
