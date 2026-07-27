@@ -3,7 +3,7 @@
 > 버전 표기: `v1.4.6.N` = RustDesk 베이스(1.4.6) + 우리 빌드번호 N(kLuxComBuild). 소비자/기사 좌패널 하단에 표시.
 > (구 형식 `MMDD-N` 은 0608-3 까지) 패치할 때마다 N을 올리고 여기에 기록한다.
 
-## v1.4.6.4 (2026-07-03)
+## v1.4.6.4 (2026-07-27)
 - **[버그수정] '윈도우 공유문제 해결' 적용 시 Workstation(SMB 클라이언트) 서비스가 중지되던 치명 버그 수정**: 적용 스크립트가 LanmanWorkstation을 시작한 직후 곧바로 `Restart-Service -Force`를 호출 → START_PENDING 경합으로 재시작의 Start 단계가 무시되어 서비스가 '중지'된 채 남았음(`-EA 0`로 은폐). Workstation이 중지되면 그 PC는 공유폴더·NAS 접근 자체가 불가 → 기능이 목적과 정반대로 동작. 수정: ①자동시작 목록에서 LanmanWorkstation 제외(경합 원천 제거) ②이중 `Restart-Service` 삭제 → 안전 재시작(Stop→완전정지 대기→Start, Running까지 최대 3회 재시도→의존 서비스 Browser 복구) ③'원래대로 복구'(winfix_restore.ps1)에도 같은 안전 재시작 적용(복구를 눌러도 재발하던 문제 차단). 레지스트리 변경(게스트 허용·서명 해제)은 그대로 — 서비스 중지는 재시작 로직 버그였을 뿐 SMB 설정과 무관.
 - 버전 v1.4.6.3 → v1.4.6.4 (kLuxComBuild 3→4). (consumer·staff 공통)
 
